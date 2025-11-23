@@ -1,9 +1,12 @@
 // Service exports
-export { ReelSearchService, reelSearchService } from './reelSearchService';
-export { VideoDownloadService, videoDownloadService } from './videoDownloadService';
-export { TranscriptionService, transcriptionService } from './transcriptionService';
-export { BuzzAnalysisService, buzzAnalysisService } from './buzzAnalysisService';
-export { ThreadsGeneratorService, threadsGeneratorService } from './threadsGeneratorService';
-export { ReelScriptGeneratorService, reelScriptGeneratorService } from './reelScriptGeneratorService';
-export { CaptionGeneratorService, captionGeneratorService } from './captionGeneratorService';
-export { CommentGeneratorService, commentGeneratorService } from './commentGeneratorService';
+export { ReelSearchService, reelSearchService } from './reelSearchService.js';
+export { VideoDownloadService, videoDownloadService } from './videoDownloadService.js';
+export { TranscriptionService, transcriptionService } from './transcriptionService.js';
+export { BuzzAnalysisService, buzzAnalysisService } from './buzzAnalysisService.js';
+export { ThreadsGeneratorService, threadsGeneratorService } from './threadsGeneratorService.js';
+export { ReelScriptGeneratorService, reelScriptGeneratorService } from './reelScriptGeneratorService.js';
+export { CaptionGeneratorService, captionGeneratorService } from './captionGeneratorService.js';
+export { CommentGeneratorService, commentGeneratorService } from './commentGeneratorService.js';
+// Instagram API
+export { InstagramAuthService, instagramAuthService } from './instagramAuthService.js';
+export { InstagramApiService, instagramApiService } from './instagramApiService.js';

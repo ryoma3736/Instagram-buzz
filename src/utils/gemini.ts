@@ -3,8 +3,8 @@ import { GoogleGenAI } from '@google/genai';
 
 const GEMINI_MODEL = 'gemini-3-pro-preview';
 
-// Initialize Gemini client
-export const gemini = new GoogleGenAI({});
+// Initialize Gemini client with API key
+export const gemini = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY || '' });
 
 /**
  * Generate text content using Gemini 3

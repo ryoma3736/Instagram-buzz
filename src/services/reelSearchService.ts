@@ -1,5 +1,7 @@
 // F1: バズリール検索機能
-import { BuzzReel, SearchParams } from '../types';
+import { BuzzReel, SearchParams } from '../types/index.js';
+import { instagramApiService } from './instagramApiService.js';
+import { instagramAuthService } from './instagramAuthService.js';
 
 const INSTAGRAM_GRAPH_API = 'https://graph.instagram.com';
 
@@ -7,7 +9,7 @@ export class ReelSearchService {
   private accessToken: string;
 
   constructor(accessToken?: string) {
-    this.accessToken = accessToken || process.env.INSTAGRAM_ACCESS_TOKEN || '';
+    this.accessToken = accessToken || instagramAuthService.getStoredToken() || process.env.INSTAGRAM_ACCESS_TOKEN || '';
   }
 
   /**

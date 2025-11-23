@@ -115,36 +115,45 @@ async function runBuzzAnalysis(): Promise<void> {
   const text = await ask('📝 分析するテキスト（リールの内容）:\n');
   console.log('\n分析中...');
 
-  const analysis = await buzzAnalysisService.analyze(text);
-  console.log('\n📊 バズ分析結果:');
-  console.log(JSON.stringify(analysis, null, 2));
+  const factors = await buzzAnalysisService.quickAnalyze(text);
+  console.log('\n📊 バズ要因:');
+  factors.forEach((f, i) => console.log(`  ${i+1}. ${f}`));
 }
 
 async function generateThreadsPost(): Promise<void> {
   const topic = await ask('📝 トピック: ');
   console.log('\n生成中...');
 
-  const post = await threadsGeneratorService.generate(topic);
+  const script = { hook: topic, main_points: [topic], cta: 'フォローしてね' };
+  const analysis = { hook_type: 'question', emotional_triggers: ['curiosity'], content_structure: 'problem-solution', buzz_score: 80, recommendations: [] };
+  const post = await threadsGeneratorService.generateThreadsPost(script as any, analysis as any, topic);
   console.log('\n📱 Threads投稿案:');
-  console.log(post);
+  console.log('投稿1:', post.post1.text);
+  console.log('投稿2:', post.post2.text);
+  console.log('ハッシュタグ:', post.hashtags.join(' '));
 }
 
 async function generateCaption(): Promise<void> {
   const topic = await ask('📝 リールの内容: ');
   console.log('\n生成中...');
 
-  const caption = await captionGeneratorService.generate(topic);
+  const script = { hook: topic, main_points: [topic], cta: 'いいね＆保存してね' };
+  const caption = await captionGeneratorService.generateCaption(script as any);
   console.log('\n✍️ キャプション案:');
-  console.log(caption);
+  console.log(caption.main_text);
+  console.log('\nCTA:', caption.cta);
+  console.log('ハッシュタグ:', caption.hashtags.join(' '));
 }
 
 async function generateComment(): Promise<void> {
   const comment = await ask('💬 返信するコメント: ');
   console.log('\n生成中...');
 
-  const reply = await commentGeneratorService.generate(comment);
+  const reply = await commentGeneratorService.generateReply('投稿内容', comment);
   console.log('\n💬 返信案:');
-  console.log(reply);
+  reply.suggestions.forEach((s, i) => {
+    console.log(`  ${i+1}. ${s.text} (${s.tone})`);
+  });
 }
 
 async function showDbStats(): Promise<void> {

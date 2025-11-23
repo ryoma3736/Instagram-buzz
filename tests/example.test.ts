@@ -7,12 +7,13 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { hello } from '../src/index.js';
+import { ReelSearchService } from '../src/services/reelSearchService.js';
 
 describe('Instagram-buzz', () => {
-  it('should return greeting message', () => {
-    const result = hello();
-    expect(result).toBe('Hello from Instagram-buzz!');
+  it('should create ReelSearchService instance', () => {
+    const service = new ReelSearchService();
+    expect(service).toBeDefined();
+    expect(typeof service.searchBuzzReels).toBe('function');
   });
 
   it('should handle basic math', () => {

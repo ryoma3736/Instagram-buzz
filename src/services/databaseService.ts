@@ -1,6 +1,7 @@
 // SQLite データベースサービス
 import Database from 'better-sqlite3';
 import * as path from 'path';
+import * as fs from 'fs';
 import { BuzzReel } from '../types/index.js';
 
 const DB_PATH = process.env.DB_PATH || './data/instagram-buzz.db';
@@ -11,8 +12,8 @@ export class DatabaseService {
   constructor(dbPath: string = DB_PATH) {
     // データディレクトリ作成
     const dir = path.dirname(dbPath);
-    if (!require('fs').existsSync(dir)) {
-      require('fs').mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
 
     this.db = new Database(dbPath);

@@ -46,7 +46,9 @@ async function demo() {
   const caption = await captionGeneratorService.generateCaption(script as any);
   console.log('キャプション案:');
   console.log(caption.main_text);
-  console.log('ハッシュタグ:', caption.hashtags.join(' '));
+  if (caption.hashtags && Array.isArray(caption.hashtags)) {
+    console.log('ハッシュタグ:', caption.hashtags.join(' '));
+  }
 
   console.log('\n🎉 デモ完了！');
   databaseService.close();

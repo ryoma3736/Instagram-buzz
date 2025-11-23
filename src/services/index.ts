@@ -12,3 +12,5 @@ export { InstagramAuthService, instagramAuthService } from './instagramAuthServi
 export { InstagramApiService, instagramApiService } from './instagramApiService.js';
 // Instagram Scraper (API Key不要)
 export { InstagramScraperService, instagramScraperService } from './instagramScraperService.js';
+// Database (SQLite)
+export { DatabaseService, databaseService } from './databaseService.js';

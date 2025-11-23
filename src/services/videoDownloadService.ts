@@ -131,7 +131,7 @@ export class VideoDownloadService {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const videoUrl = data.url || data.video_url;
 
       if (!videoUrl) {

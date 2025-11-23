@@ -1,21 +1,13 @@
-// F4: バズ理由分析機能
-import { BuzzAnalysis, Script } from '../types';
-import Anthropic from '@anthropic-ai/sdk';
+// F4: バズ理由分析機能 - Gemini 3
+import { BuzzAnalysis, Script } from '../types/index.js';
+import { generateJSON } from '../utils/gemini.js';
 
 export class BuzzAnalysisService {
-  private anthropic: Anthropic;
-
-  constructor() {
-    this.anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY || ''
-    });
-  }
-
   /**
    * 台本からバズ理由を分析
    */
   async analyzeBuzzFactors(script: Script, metrics?: { views: number; likes: number; comments: number }): Promise<BuzzAnalysis> {
-    console.log('🔬 Analyzing buzz factors...');
+    console.log('🔬 Analyzing buzz factors with Gemini 3...');
 
     const prompt = `以下のバズったコンテンツを詳細に分析してください。
 
@@ -51,29 +43,10 @@ ${metrics ? `
   ],
   "target_audience": "ターゲット層の分析",
   "recommendations": ["改善点1", "改善点2"]
-}
+}`;
 
-JSONのみを返してください。`;
-
-    try {
-      const response = await this.anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 2048,
-        messages: [{ role: 'user', content: prompt }]
-      });
-
-      const content = response.content[0];
-      if (content.type === 'text') {
-        const jsonMatch = content.text.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          return JSON.parse(jsonMatch[0]) as BuzzAnalysis;
-        }
-      }
-    } catch (error) {
-      console.error('Analysis failed:', error);
-    }
-
-    return this.getDefaultAnalysis();
+    const result = await generateJSON<BuzzAnalysis>(prompt);
+    return result || this.getDefaultAnalysis();
   }
 
   /**

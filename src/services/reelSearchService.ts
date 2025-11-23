@@ -160,7 +160,7 @@ export class ReelSearchService {
 
       if (!response.ok) return null;
 
-      const data = await response.json();
+      const data = await response.json() as any;
       const item = data.graphql?.shortcode_media;
 
       if (!item) return null;

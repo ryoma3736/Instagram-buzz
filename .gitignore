@@ -167,3 +167,10 @@ coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Instagram Cookies (sensitive authentication data)
+cookies/
+*.cookies.json
+src/services/instagram/cookies/
+instagram_session.json
+.instagram_token.json

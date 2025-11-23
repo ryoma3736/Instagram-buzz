@@ -1,19 +1,10 @@
-// F1: バズリール検索機能
+// F1: バズリール検索機能（API Key不要版）
 import { BuzzReel, SearchParams } from '../types/index.js';
-import { instagramApiService } from './instagramApiService.js';
-import { instagramAuthService } from './instagramAuthService.js';
-
-const INSTAGRAM_GRAPH_API = 'https://graph.instagram.com';
+import { instagramScraperService } from './instagramScraperService.js';
 
 export class ReelSearchService {
-  private accessToken: string;
-
-  constructor(accessToken?: string) {
-    this.accessToken = accessToken || instagramAuthService.getStoredToken() || process.env.INSTAGRAM_ACCESS_TOKEN || '';
-  }
-
   /**
-   * バズリールを検索
+   * バズリールを検索（API Key不要・スクレイピング版）
    */
   async searchBuzzReels(params: SearchParams): Promise<BuzzReel[]> {
     const {
@@ -27,14 +18,11 @@ export class ReelSearchService {
     console.log(`   Period: ${period} days, Min views: ${min_views}`);
 
     try {
-      // Instagram Graph API または スクレイピング代替
-      const reels = await this.fetchReelsFromAPI(keyword, limit * 3);
+      // スクレイピングでリール取得（API Key不要）
+      const reels = await instagramScraperService.searchByHashtag(keyword, limit * 3);
 
       // フィルタリング
-      const filtered = this.filterReels(reels, {
-        period,
-        min_views
-      });
+      const filtered = this.filterReels(reels, { period, min_views });
 
       // エンゲージメント率でソート
       const sorted = this.sortByEngagement(filtered);
@@ -42,54 +30,22 @@ export class ReelSearchService {
       return sorted.slice(0, limit);
     } catch (error) {
       console.error('Search failed:', error);
-      // フォールバック: モックデータ
       return this.getMockData(keyword, limit);
     }
   }
 
   /**
-   * Instagram APIからリール取得
+   * ユーザーのリールを取得
    */
-  private async fetchReelsFromAPI(hashtag: string, limit: number): Promise<BuzzReel[]> {
-    // Instagram Basic Display API / Graph API
-    const endpoint = `${INSTAGRAM_GRAPH_API}/ig_hashtag_search?q=${encodeURIComponent(hashtag)}`;
-
-    if (!this.accessToken) {
-      console.warn('⚠️ No Instagram access token, using mock data');
-      return [];
-    }
-
-    const response = await fetch(`${endpoint}&access_token=${this.accessToken}`);
-
-    if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return this.transformAPIResponse(data);
+  async getUserReels(username: string, limit: number = 12): Promise<BuzzReel[]> {
+    return instagramScraperService.getPublicReels(username, limit);
   }
 
   /**
-   * APIレスポンスを変換
+   * トレンドリールを取得
    */
-  private transformAPIResponse(data: any): BuzzReel[] {
-    if (!data.data) return [];
-
-    return data.data.map((item: any) => ({
-      id: item.id,
-      url: `https://www.instagram.com/reel/${item.shortcode}/`,
-      shortcode: item.shortcode,
-      title: item.caption || '',
-      views: item.video_view_count || 0,
-      likes: item.like_count || 0,
-      comments: item.comments_count || 0,
-      posted_at: new Date(item.timestamp),
-      author: {
-        username: item.owner?.username || 'unknown',
-        followers: item.owner?.edge_followed_by?.count || 0
-      },
-      thumbnail_url: item.thumbnail_url
-    }));
+  async getTrendingReels(limit: number = 20): Promise<BuzzReel[]> {
+    return instagramScraperService.getTrendingReels(limit);
   }
 
   /**
@@ -144,66 +100,10 @@ export class ReelSearchService {
   }
 
   /**
-   * URLからリール情報を取得
+   * URLからリール情報を取得（スクレイパー使用）
    */
   async getReelInfo(url: string): Promise<BuzzReel | null> {
-    const shortcode = this.extractShortcode(url);
-    if (!shortcode) return null;
-
-    try {
-      const response = await fetch(
-        `https://www.instagram.com/p/${shortcode}/?__a=1&__d=dis`,
-        {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-          }
-        }
-      );
-
-      if (!response.ok) return null;
-
-      const data = await response.json() as any;
-      const item = data.graphql?.shortcode_media;
-
-      if (!item) return null;
-
-      return {
-        id: item.id,
-        url,
-        shortcode,
-        title: item.edge_media_to_caption?.edges[0]?.node?.text || '',
-        views: item.video_view_count || 0,
-        likes: item.edge_media_preview_like?.count || 0,
-        comments: item.edge_media_to_comment?.count || 0,
-        posted_at: new Date(item.taken_at_timestamp * 1000),
-        author: {
-          username: item.owner?.username || '',
-          followers: item.owner?.edge_followed_by?.count || 0
-        },
-        thumbnail_url: item.thumbnail_src
-      };
-    } catch (error) {
-      console.error('Failed to get reel info:', error);
-      return null;
-    }
-  }
-
-  /**
-   * URLからshortcodeを抽出
-   */
-  private extractShortcode(url: string): string | null {
-    const patterns = [
-      /instagram\.com\/reel\/([A-Za-z0-9_-]+)/,
-      /instagram\.com\/p\/([A-Za-z0-9_-]+)/,
-      /instagr\.am\/p\/([A-Za-z0-9_-]+)/
-    ];
-
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) return match[1];
-    }
-
-    return null;
+    return instagramScraperService.getReelByUrl(url);
   }
 }
 

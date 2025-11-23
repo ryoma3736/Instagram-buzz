@@ -10,3 +10,5 @@ export { CommentGeneratorService, commentGeneratorService } from './commentGener
 // Instagram API
 export { InstagramAuthService, instagramAuthService } from './instagramAuthService.js';
 export { InstagramApiService, instagramApiService } from './instagramApiService.js';
+// Instagram Scraper (API Key不要)
+export { InstagramScraperService, instagramScraperService } from './instagramScraperService.js';

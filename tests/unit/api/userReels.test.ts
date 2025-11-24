@@ -182,6 +182,8 @@ describe('UserReelsService', () => {
         fullName: 'Private User',
         profilePicUrl: '',
         followerCount: 100,
+        followingCount: 50,
+        mediaCount: 10,
         isVerified: false,
         isPrivate: true,
       });

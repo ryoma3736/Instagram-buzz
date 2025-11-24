@@ -562,7 +562,7 @@ describe('helper functions', () => {
       const result = await service.getTrendingReels();
 
       const item = result.data?.items[0];
-      expect(item?.hashtags.length).toBeGreaterThan(0);
+      expect(item?.hashtags?.length).toBeGreaterThan(0);
     });
 
     it('should return empty array for no hashtags', async () => {

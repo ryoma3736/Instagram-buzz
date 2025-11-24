@@ -11,3 +11,4 @@ export * from './responseParser.js';
 export * from './hashtagSearch.js';
 export * from './userResolver.js';
 export * from './userReels.js';
+export * from './multiStrategyScraperService.js';

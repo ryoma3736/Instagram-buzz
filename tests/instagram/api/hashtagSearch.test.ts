@@ -352,9 +352,11 @@ describe('searchHashtag', () => {
   });
 
   it('should return success response with posts', async () => {
+    const responseJson = JSON.stringify(mockSectionsResponse);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => mockSectionsResponse,
+      text: async () => responseJson,
       headers: new Headers({ 'content-type': 'application/json' }),
     });
 
@@ -389,9 +391,11 @@ describe('InstagramPost structure', () => {
   });
 
   it('should parse posts with correct structure', async () => {
+    const responseJson = JSON.stringify(mockSectionsResponse);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => mockSectionsResponse,
+      text: async () => responseJson,
       headers: new Headers({ 'content-type': 'application/json' }),
     });
 
@@ -413,9 +417,11 @@ describe('InstagramPost structure', () => {
   });
 
   it('should generate correct URLs for video posts', async () => {
+    const responseJson = JSON.stringify(mockSectionsResponse);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => mockSectionsResponse,
+      text: async () => responseJson,
       headers: new Headers({ 'content-type': 'application/json' }),
     });
 
@@ -429,9 +435,11 @@ describe('InstagramPost structure', () => {
   });
 
   it('should generate correct URLs for image posts', async () => {
+    const responseJson = JSON.stringify(mockSectionsResponse);
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => mockSectionsResponse,
+      text: async () => responseJson,
       headers: new Headers({ 'content-type': 'application/json' }),
     });
 

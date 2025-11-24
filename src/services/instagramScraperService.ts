@@ -2,6 +2,11 @@
 import { BuzzReel } from '../types/index.js';
 import { authenticatedScraperService } from './instagram/authenticatedScraperService.js';
 import { cookieAuthService } from './instagram/cookieAuthService.js';
+import {
+  isHtmlResponse,
+  detectHtmlResponseType,
+  InstagramHtmlResponseError,
+} from './instagram/api/apiClient.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
@@ -45,11 +50,43 @@ export class InstagramScraperService {
       });
 
       if (!response.ok) {
-        console.log('📱 Trying alternative method...');
+        console.log('[Scraper] API response not OK, trying alternative method...');
         return await this.getReelsFromHTML(username, limit);
       }
 
-      const data = await response.json() as any;
+      // Get response as text first to check for HTML
+      const text = await response.text();
+
+      // Check for HTML response
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        console.error(`[Scraper] HTML response detected (${responseType})`);
+        const error = new InstagramHtmlResponseError(
+          `Instagram returned HTML instead of JSON`,
+          responseType,
+          `web_profile_info/${username}`,
+          text
+        );
+        console.error(`[Scraper] ${error.getUserMessage()}`);
+
+        // For login required, clear cookies if configured
+        if (responseType === 'login_required') {
+          console.log('[Scraper] Clearing potentially invalid cookies');
+          cookieAuthService.clearCookies();
+        }
+
+        return await this.getReelsFromHTML(username, limit);
+      }
+
+      // Parse JSON
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error('[Scraper] Failed to parse JSON response');
+        return await this.getReelsFromHTML(username, limit);
+      }
+
       const user = data.data?.user;
 
       if (!user) return await this.getReelsFromHTML(username, limit);
@@ -85,10 +122,32 @@ export class InstagramScraperService {
       const html = await response.text();
 
       // JSON データを抽出
+      // Check for HTML error response (login page, captcha, etc.)
+      if (isHtmlResponse(html) && !html.includes('xdt_api__v1__clips__user__connection_v2')) {
+        const responseType = detectHtmlResponseType(html);
+        if (responseType !== 'unknown_html') {
+          console.error(`[Scraper] HTML error response detected (${responseType})`);
+          const error = new InstagramHtmlResponseError(
+            'Instagram returned error page',
+            responseType,
+            `${username}/reels/`,
+            html
+          );
+          console.error(`[Scraper] ${error.getUserMessage()}`);
+          return [];
+        }
+      }
+
       const scriptMatch = html.match(/<script type="application\/json"[^>]*>(\{.*?"xdt_api__v1__clips__user__connection_v2".*?\})<\/script>/s);
 
       if (scriptMatch) {
-        const jsonData = JSON.parse(scriptMatch[1]);
+        let jsonData: any;
+        try {
+          jsonData = JSON.parse(scriptMatch[1]);
+        } catch {
+          console.error('[Scraper] Failed to parse embedded JSON data');
+          return [];
+        }
         const clips = jsonData?.require?.[0]?.[3]?.[0]?.__bbox?.require?.[0]?.[3]?.[1]?.__bbox?.result?.data?.xdt_api__v1__clips__user__connection_v2?.edges;
 
         if (clips) {
@@ -168,7 +227,52 @@ export class InstagramScraperService {
       });
 
       if (infoRes.ok) {
-        const data = await infoRes.json() as any;
+        const infoText = await infoRes.text();
+
+        // Check for HTML response
+        if (isHtmlResponse(infoText)) {
+          const responseType = detectHtmlResponseType(infoText);
+          console.error(`[Scraper] HTML response when fetching reel info (${responseType})`);
+          const error = new InstagramHtmlResponseError(
+            'Instagram returned HTML for reel info',
+            responseType,
+            `p/${shortcode}`,
+            infoText
+          );
+          console.error(`[Scraper] ${error.getUserMessage()}`);
+
+          // Return fallback data
+          return {
+            id: shortcode,
+            url,
+            shortcode,
+            title,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            posted_at: new Date(),
+            author: { username: authorUsername, followers: 0 }
+          };
+        }
+
+        let data: any;
+        try {
+          data = JSON.parse(infoText);
+        } catch {
+          console.error('[Scraper] Failed to parse reel info JSON');
+          return {
+            id: shortcode,
+            url,
+            shortcode,
+            title,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            posted_at: new Date(),
+            author: { username: authorUsername, followers: 0 }
+          };
+        }
+
         const item = data.graphql?.shortcode_media || data.items?.[0];
 
         if (item) {

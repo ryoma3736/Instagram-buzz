@@ -1,6 +1,7 @@
 // Instagram Graph API サービス
 import { BuzzReel } from '../types/index.js';
 import { instagramAuthService } from './instagramAuthService.js';
+import { safeResponseJson, HtmlResponseError } from '../utils/htmlDetection.js';
 
 const GRAPH_API_BASE = 'https://graph.instagram.com';
 
@@ -22,7 +23,16 @@ export class InstagramApiService {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`API error: ${response.status}`);
 
-      const data = await response.json() as any;
+      let data: any;
+      try {
+        data = await safeResponseJson<any>(response);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          console.warn('[InstagramAPI] Received HTML instead of JSON');
+          return [];
+        }
+        throw error;
+      }
       return this.transformMedia(data.data || []);
     } catch (error) {
       console.error('Instagram API error:', error);
@@ -43,7 +53,16 @@ export class InstagramApiService {
       const searchResponse = await fetch(searchUrl);
       if (!searchResponse.ok) return [];
 
-      const searchData = await searchResponse.json() as any;
+      let searchData: any;
+      try {
+        searchData = await safeResponseJson<any>(searchResponse);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          console.warn('[InstagramAPI] Received HTML in hashtag search');
+          return [];
+        }
+        throw error;
+      }
       const hashtagId = searchData.data?.[0]?.id;
       if (!hashtagId) return [];
 
@@ -54,7 +73,16 @@ export class InstagramApiService {
       const mediaResponse = await fetch(mediaUrl);
       if (!mediaResponse.ok) return [];
 
-      const mediaData = await mediaResponse.json() as any;
+      let mediaData: any;
+      try {
+        mediaData = await safeResponseJson<any>(mediaResponse);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          console.warn('[InstagramAPI] Received HTML in media fetch');
+          return [];
+        }
+        throw error;
+      }
       return this.transformMedia(mediaData.data || []);
     } catch (error) {
       console.error('Hashtag search error:', error);
@@ -76,7 +104,16 @@ export class InstagramApiService {
       const response = await fetch(url);
       if (!response.ok) return null;
 
-      const data = await response.json() as any;
+      let data: any;
+      try {
+        data = await safeResponseJson<any>(response);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          console.warn('[InstagramAPI] Received HTML in media details');
+          return null;
+        }
+        throw error;
+      }
       const reels = this.transformMedia([data]);
       return reels[0] || null;
     } catch (error) {
@@ -130,7 +167,16 @@ export class InstagramApiService {
       const url = `${GRAPH_API_BASE}/me?fields=id,username&access_token=${token}`;
       const response = await fetch(url);
       if (response.ok) {
-        const data = await response.json() as any;
+        let data: any;
+        try {
+          data = await safeResponseJson<any>(response);
+        } catch (error) {
+          if (error instanceof HtmlResponseError) {
+            console.log('❌ Received HTML instead of JSON');
+            return false;
+          }
+          throw error;
+        }
         console.log(`✅ Connected as @${data.username}`);
         return true;
       }

@@ -6,6 +6,7 @@
 
 import type { InstagramCookies } from '../session/types.js';
 import { DEFAULT_API_CONFIG } from './types.js';
+import { isHtmlResponse, HtmlResponseError } from '../../../utils/htmlDetection.js';
 
 /**
  * Rate limit configuration
@@ -239,12 +240,29 @@ export class ApiClient {
     }
 
     const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      return (await response.json()) as T;
+
+    // Check for HTML content-type (Instagram may return HTML instead of JSON)
+    if (contentType?.includes('text/html')) {
+      throw new HtmlResponseError(
+        'Response Content-Type is text/html - Instagram may be blocking the request'
+      );
+    }
+
+    // Get text first to check for HTML before parsing
+    const text = await response.text();
+
+    // Check if response is HTML instead of JSON (even if content-type says JSON)
+    if (isHtmlResponse(text)) {
+      throw new HtmlResponseError();
+    }
+
+    // For JSON responses, parse the text
+    if (contentType?.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+      return JSON.parse(text) as T;
     }
 
     // For non-JSON responses, return text as unknown type
-    return (await response.text()) as unknown as T;
+    return text as unknown as T;
   }
 
   /**

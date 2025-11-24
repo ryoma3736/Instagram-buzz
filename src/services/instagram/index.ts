@@ -89,3 +89,20 @@ export {
   authenticatedScraperService,
   AuthenticatedScraperConfig,
 } from './authenticatedScraperService.js';
+
+// Public Scrapers (Issue #52 - Cookie不要)
+export {
+  EmbedScraper,
+  embedScraper,
+  PlaywrightScraper,
+  PlaywrightScraperConfig,
+  playwrightScraper,
+} from './publicScraper/index.js';
+
+// Multi-Strategy Service (Issue #52 - 自動切り替え)
+export {
+  MultiStrategyService,
+  MultiStrategyConfig,
+  ScrapingStrategy,
+  multiStrategyService,
+} from './multiStrategyService.js';

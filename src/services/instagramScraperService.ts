@@ -1,17 +1,28 @@
-// Instagram スクレイピングサービス（Cookie認証対応版）
+// Instagram スクレイピングサービス（Cookie認証対応版 + 認証不要フォールバック）
 import { BuzzReel } from '../types/index.js';
 import { authenticatedScraperService } from './instagram/authenticatedScraperService.js';
 import { cookieAuthService } from './instagram/cookieAuthService.js';
+import { multiStrategyService } from './instagram/multiStrategyService.js';
 import { safeResponseJson, safeJsonParse, HtmlResponseError } from '../utils/htmlDetection.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 export class InstagramScraperService {
+  /** Use multi-strategy service for fallback */
+  private useMultiStrategy: boolean = true;
+
   /**
    * Check if authenticated mode is available
    */
   isAuthenticated(): boolean {
     return cookieAuthService.isConfigured();
+  }
+
+  /**
+   * Enable or disable multi-strategy fallback
+   */
+  setMultiStrategy(enabled: boolean): void {
+    this.useMultiStrategy = enabled;
   }
 
   /**
@@ -74,7 +85,18 @@ export class InstagramScraperService {
 
     } catch (error) {
       console.log('⚠️ API failed, trying HTML scrape...');
-      return await this.getReelsFromHTML(username, limit);
+      const htmlReels = await this.getReelsFromHTML(username, limit);
+      if (htmlReels.length > 0) {
+        return htmlReels;
+      }
+
+      // Final fallback: use multi-strategy service
+      if (this.useMultiStrategy) {
+        console.log('📡 Using multi-strategy fallback...');
+        return await multiStrategyService.getPublicReels(username, limit);
+      }
+
+      return [];
     }
   }
 
@@ -243,6 +265,13 @@ export class InstagramScraperService {
 
     } catch (error) {
       console.error('Reel fetch failed:', error);
+
+      // Fallback to multi-strategy
+      if (this.useMultiStrategy) {
+        console.log('📡 Using multi-strategy fallback for reel...');
+        return await multiStrategyService.getReelByUrl(url);
+      }
+
       return null;
     }
   }
@@ -295,6 +324,13 @@ export class InstagramScraperService {
       return reels;
     } catch (error) {
       console.error('Hashtag search failed:', error);
+
+      // Fallback to multi-strategy
+      if (this.useMultiStrategy) {
+        console.log('📡 Using multi-strategy fallback for hashtag search...');
+        return await multiStrategyService.searchByHashtag(hashtag, limit);
+      }
+
       return [];
     }
   }
@@ -341,6 +377,13 @@ export class InstagramScraperService {
       return reels.sort((a, b) => b.views - a.views);
     } catch (error) {
       console.error('Trending fetch failed:', error);
+
+      // Fallback to multi-strategy
+      if (this.useMultiStrategy) {
+        console.log('📡 Using multi-strategy fallback for trending...');
+        return await multiStrategyService.getTrendingReels(limit);
+      }
+
       return [];
     }
   }

@@ -1,0 +1,194 @@
+/**
+ * Instagram API Types
+ * @module services/instagram/api/types
+ */
+
+/**
+ * Trending content item
+ */
+export interface TrendingContent {
+  type: 'reel' | 'post' | 'story';
+  id: string;
+  shortcode: string;
+  url: string;
+  mediaUrl: string;
+  caption: string;
+  engagement: {
+    likes: number;
+    comments: number;
+    views?: number;
+    shares?: number;
+  };
+  owner: {
+    id: string;
+    username: string;
+    isVerified: boolean;
+    profilePicUrl?: string;
+  };
+  timestamp?: number;
+  hashtags?: string[];
+  mentions?: string[];
+}
+
+/**
+ * Result of trending content fetch
+ */
+export interface TrendingResult {
+  items: TrendingContent[];
+  hasMore: boolean;
+  endCursor: string | null;
+  category?: string;
+  fetchedAt: number;
+}
+
+/**
+ * Explore page section
+ */
+export interface ExploreSection {
+  id: string;
+  title: string;
+  type: 'reels' | 'posts' | 'mixed';
+  items: TrendingContent[];
+}
+
+/**
+ * Explore page result
+ */
+export interface ExploreResult {
+  sections: ExploreSection[];
+  topPicks: TrendingContent[];
+  hasMore: boolean;
+  endCursor: string | null;
+  fetchedAt: number;
+}
+
+/**
+ * API request options
+ */
+export interface ApiRequestOptions {
+  limit?: number;
+  cursor?: string;
+  category?: string;
+  region?: string;
+}
+
+/**
+ * API response wrapper
+ */
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  statusCode?: number;
+}
+
+/**
+ * Instagram API endpoints
+ */
+export const API_ENDPOINTS = {
+  EXPLORE: '/api/v1/discover/topical_explore/',
+  TRENDING_REELS: '/api/v1/clips/trending/',
+  REELS_MEDIA: '/api/v1/feed/reels_media/',
+  USER_FEED: '/api/v1/feed/user/',
+  MEDIA_INFO: '/api/v1/media/{media_id}/info/',
+} as const;
+
+/**
+ * Default API configuration
+ */
+export const DEFAULT_API_CONFIG = {
+  baseUrl: 'https://i.instagram.com',
+  webBaseUrl: 'https://www.instagram.com',
+  userAgent: 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229237)',
+  appId: '936619743392459',
+  defaultLimit: 20,
+} as const;
+
+// ============================================
+// Hashtag Search Types (Issue #26)
+// ============================================
+
+/**
+ * Instagram post data structure
+ */
+export interface InstagramPost {
+  /** Unique post identifier */
+  id: string;
+  /** Short URL code for the post */
+  shortcode: string;
+  /** Full URL to the post */
+  url: string;
+  /** Type of media content */
+  mediaType: 'image' | 'video' | 'carousel';
+  /** Post caption/description */
+  caption: string;
+  /** Number of likes */
+  likeCount: number;
+  /** Number of comments */
+  commentCount: number;
+  /** Unix timestamp when the post was created */
+  timestamp: number;
+  /** Post owner information */
+  owner: {
+    id: string;
+    username: string;
+  };
+}
+
+/**
+ * Result of hashtag search operation
+ */
+export interface HashtagSearchResult {
+  /** Array of posts matching the hashtag */
+  posts: InstagramPost[];
+  /** Whether more results are available */
+  hasMore: boolean;
+  /** Cursor for pagination */
+  endCursor: string | null;
+  /** Total count of posts for this hashtag (if available) */
+  totalCount: number;
+  /** The hashtag that was searched */
+  hashtag: string;
+}
+
+/**
+ * Options for hashtag search
+ */
+export interface HashtagSearchOptions {
+  /** Maximum number of posts to retrieve */
+  limit?: number;
+  /** Pagination cursor for fetching more results */
+  cursor?: string;
+  /** Whether to include top posts only */
+  topPostsOnly?: boolean;
+}
+
+/**
+ * Hashtag info response
+ */
+export interface HashtagInfo {
+  /** Hashtag ID */
+  id: string;
+  /** Hashtag name (without #) */
+  name: string;
+  /** Total number of posts with this hashtag */
+  mediaCount: number;
+  /** Profile picture URL for the hashtag */
+  profilePicUrl?: string;
+}
+
+/**
+ * Hashtag search API endpoints
+ */
+export const HASHTAG_API_ENDPOINTS = {
+  /** Search for hashtag ID */
+  HASHTAG_SEARCH: '/api/v1/tags/search/',
+  /** Get hashtag info */
+  HASHTAG_INFO: '/api/v1/tags/{tag_name}/info/',
+  /** Get hashtag sections (top + recent) */
+  HASHTAG_SECTIONS: '/api/v1/tags/{tag_name}/sections/',
+  /** Get hashtag web info (graphql) */
+  HASHTAG_WEB_INFO: '/api/v1/tags/web_info/',
+  /** Graphql hashtag query */
+  HASHTAG_GRAPHQL: '/graphql/query/',
+} as const;

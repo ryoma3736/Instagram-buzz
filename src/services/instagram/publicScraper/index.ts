@@ -16,6 +16,6 @@ export {
 // Playwright Browser Scraper
 export {
   PlaywrightScraper,
-  PlaywrightScraperConfig,
   playwrightScraper,
 } from './playwrightScraper.js';
+export type { PlaywrightScraperConfig } from './playwrightScraper.js';

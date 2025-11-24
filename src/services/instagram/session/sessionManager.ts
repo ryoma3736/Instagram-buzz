@@ -18,6 +18,8 @@ export interface SessionStatus {
   lastChecked: Date;
   userId?: string;
   username?: string;
+  remainingTimeFormatted: string;
+  health: 'healthy' | 'warning' | 'critical' | 'expired';
 }
 
 /**
@@ -82,6 +84,13 @@ export class SessionManager {
    * セッションの有効性をチェック
    */
   async checkValidity(): Promise<SessionStatus> {
+    return this.getStatus();
+  }
+
+  /**
+   * セッションステータスを取得（同期版）
+   */
+  getStatus(): SessionStatus {
     if (!this.session) {
       return {
         isValid: false,
@@ -89,13 +98,26 @@ export class SessionManager {
         remainingTime: 0,
         needsRefresh: false,
         lastChecked: new Date(),
+        remainingTimeFormatted: 'No session',
+        health: 'expired',
       };
     }
 
-    // 有効期限チェック
     const expiryResult = this.expiryChecker.checkSessionExpiry(this.session);
+    const remainingTimeFormatted = this.expiryChecker.formatRemainingTime(expiryResult.remainingTime);
+    const remainingHours = expiryResult.remainingTime / (1000 * 60 * 60);
 
-    // 期限切れの場合
+    let health: SessionStatus['health'];
+    if (expiryResult.isExpired) {
+      health = 'expired';
+    } else if (remainingHours <= 12) {
+      health = 'critical';
+    } else if (remainingHours <= 48) {
+      health = 'warning';
+    } else {
+      health = 'healthy';
+    }
+
     if (expiryResult.isExpired) {
       const status: SessionStatus = {
         isValid: false,
@@ -103,12 +125,13 @@ export class SessionManager {
         remainingTime: 0,
         needsRefresh: false,
         lastChecked: new Date(),
+        remainingTimeFormatted,
+        health,
       };
       this.notifyInvalid('セッションの有効期限が切れました');
       return status;
     }
 
-    // リフレッシュが必要な場合は警告
     if (expiryResult.needsRefresh) {
       const status: SessionStatus = {
         isValid: true,
@@ -116,18 +139,21 @@ export class SessionManager {
         remainingTime: expiryResult.remainingTime,
         needsRefresh: true,
         lastChecked: new Date(),
+        remainingTimeFormatted,
+        health,
       };
       this.notifyExpiringSoon(status);
       return status;
     }
 
-    // 通常の有効なセッション
     return {
       isValid: true,
       expiresAt: expiryResult.expiresAt,
       remainingTime: expiryResult.remainingTime,
       needsRefresh: false,
       lastChecked: new Date(),
+      remainingTimeFormatted,
+      health,
     };
   }
 
@@ -273,5 +299,15 @@ export class SessionManager {
     }
 
     return `✅ 有効 (残り: ${remaining})`;
+  }
+
+  /**
+   * セッションマネージャーを破棄
+   */
+  destroy(): void {
+    this.stopPeriodicCheck();
+    this.clearSession();
+    this.expiringSoonCallbacks = [];
+    this.sessionInvalidCallbacks = [];
   }
 }

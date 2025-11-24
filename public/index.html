@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagram-buzz - バズコンテンツ制作システム</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .service-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .service-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .service-id {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+
+        .service-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .service-description {
+            color: #666;
+            margin-bottom: 16px;
+        }
+
+        .input-group {
+            margin-bottom: 12px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .result pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .error {
+            color: #e53e3e;
+        }
+
+        .success {
+            color: #38a169;
+        }
+
+        .status-bar {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #38a169;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌸 Instagram-buzz</h1>
+            <p class="subtitle">バズコンテンツ制作システム - 認証不要スクレイピング完全実装</p>
+        </header>
+
+        <div class="status-bar">
+            <span class="status-indicator"></span>
+            <strong>サーバーステータス:</strong> <span id="serverStatus">接続中...</span>
+        </div>
+
+        <div class="services-grid">
+            <!-- F1: バズリール検索 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F1</span>
+                    <span class="service-name">バズリール検索</span>
+                </div>
+                <p class="service-description">キーワードでInstagramのバズリールを検索</p>
+                <div class="input-group">
+                    <label>キーワード</label>
+                    <input type="text" id="f1-keyword" placeholder="例: 心理学" value="心理学">
+                </div>
+                <div class="input-group">
+                    <label>取得件数</label>
+                    <input type="number" id="f1-limit" placeholder="10" value="3">
+                </div>
+                <button onclick="searchReels()">検索実行</button>
+                <div id="f1-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F2: 動画ダウンロード -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F2</span>
+                    <span class="service-name">動画ダウンロード</span>
+                </div>
+                <p class="service-description">Instagram動画をダウンロード</p>
+                <div class="input-group">
+                    <label>リールURL</label>
+                    <input type="text" id="f2-url" placeholder="https://www.instagram.com/reel/...">
+                </div>
+                <button onclick="downloadVideo()">ダウンロード</button>
+                <div id="f2-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F3: 台本変換 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F3</span>
+                    <span class="service-name">台本変換</span>
+                </div>
+                <p class="service-description">動画から台本を生成</p>
+                <div class="input-group">
+                    <label>動画パス</label>
+                    <input type="text" id="f3-path" placeholder="/path/to/video.mp4">
+                </div>
+                <button onclick="transcribeVideo()">台本生成</button>
+                <div id="f3-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F4: バズ分析 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F4</span>
+                    <span class="service-name">バズ分析</span>
+                </div>
+                <p class="service-description">リールのバズパターンを分析</p>
+                <div class="input-group">
+                    <label>分析データ (JSON)</label>
+                    <textarea id="f4-data" placeholder='[{"views": 10000, ...}]'></textarea>
+                </div>
+                <button onclick="analyzeBuzz()">分析実行</button>
+                <div id="f4-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F5: Threads投稿生成 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F5</span>
+                    <span class="service-name">Threads投稿生成</span>
+                </div>
+                <p class="service-description">Threads投稿文を生成</p>
+                <div class="input-group">
+                    <label>テーマ</label>
+                    <input type="text" id="f5-theme" placeholder="例: 心理学の法則">
+                </div>
+                <button onclick="generateThreads()">投稿生成</button>
+                <div id="f5-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F6: リール台本生成 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F6</span>
+                    <span class="service-name">リール台本生成</span>
+                </div>
+                <p class="service-description">リール用の台本を生成</p>
+                <div class="input-group">
+                    <label>テーマ</label>
+                    <input type="text" id="f6-theme" placeholder="例: 恋愛心理学">
+                </div>
+                <button onclick="generateScript()">台本生成</button>
+                <div id="f6-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F7: キャプション生成 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F7</span>
+                    <span class="service-name">キャプション生成</span>
+                </div>
+                <p class="service-description">Instagram用キャプションを生成</p>
+                <div class="input-group">
+                    <label>テーマ</label>
+                    <input type="text" id="f7-theme" placeholder="例: 心理学の法則">
+                </div>
+                <div class="input-group">
+                    <label>ターゲット</label>
+                    <input type="text" id="f7-target" placeholder="例: 20代女性">
+                </div>
+                <button onclick="generateCaption()">生成実行</button>
+                <div id="f7-result" class="result" style="display:none;"></div>
+            </div>
+
+            <!-- F8: コメント生成 -->
+            <div class="service-card">
+                <div class="service-header">
+                    <span class="service-id">F8</span>
+                    <span class="service-name">コメント生成</span>
+                </div>
+                <p class="service-description">投稿へのコメントを生成</p>
+                <div class="input-group">
+                    <label>投稿内容</label>
+                    <textarea id="f8-content" placeholder="投稿の内容を入力"></textarea>
+                </div>
+                <div class="input-group">
+                    <label>トーン</label>
+                    <input type="text" id="f8-tone" placeholder="friendly" value="friendly">
+                </div>
+                <button onclick="generateComment()">コメント生成</button>
+                <div id="f8-result" class="result" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // サーバーステータスチェック
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                document.getElementById('serverStatus').textContent = 'オンライン ✓';
+                document.getElementById('serverStatus').style.color = '#38a169';
+            } catch (error) {
+                document.getElementById('serverStatus').textContent = 'オフライン ✗';
+                document.getElementById('serverStatus').style.color = '#e53e3e';
+            }
+        }
+
+        checkServerStatus();
+        setInterval(checkServerStatus, 30000);
+
+        // F1: バズリール検索
+        async function searchReels() {
+            const keyword = document.getElementById('f1-keyword').value;
+            const limit = document.getElementById('f1-limit').value;
+            const resultDiv = document.getElementById('f1-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">検索中...</p>';
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keyword, limit: parseInt(limit) })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F2: 動画ダウンロード
+        async function downloadVideo() {
+            const url = document.getElementById('f2-url').value;
+            const resultDiv = document.getElementById('f2-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">ダウンロード中...</p>';
+
+            try {
+                const response = await fetch('/api/download', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F3: 台本変換
+        async function transcribeVideo() {
+            const videoPath = document.getElementById('f3-path').value;
+            const resultDiv = document.getElementById('f3-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">変換中...</p>';
+
+            try {
+                const response = await fetch('/api/transcribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ videoPath })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F4: バズ分析
+        async function analyzeBuzz() {
+            const dataStr = document.getElementById('f4-data').value;
+            const resultDiv = document.getElementById('f4-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">分析中...</p>';
+
+            try {
+                const reels = JSON.parse(dataStr || '[]');
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reels })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F5: Threads投稿生成
+        async function generateThreads() {
+            const theme = document.getElementById('f5-theme').value;
+            const resultDiv = document.getElementById('f5-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">生成中...</p>';
+
+            try {
+                const response = await fetch('/api/threads', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F6: リール台本生成
+        async function generateScript() {
+            const theme = document.getElementById('f6-theme').value;
+            const resultDiv = document.getElementById('f6-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">生成中...</p>';
+
+            try {
+                const response = await fetch('/api/script', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F7: キャプション生成
+        async function generateCaption() {
+            const theme = document.getElementById('f7-theme').value;
+            const targetAudience = document.getElementById('f7-target').value;
+            const resultDiv = document.getElementById('f7-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">生成中...</p>';
+
+            try {
+                const response = await fetch('/api/caption', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme, targetAudience })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+
+        // F8: コメント生成
+        async function generateComment() {
+            const postContent = document.getElementById('f8-content').value;
+            const tone = document.getElementById('f8-tone').value;
+            const resultDiv = document.getElementById('f8-result');
+
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p class="loading">生成中...</p>';
+
+            try {
+                const response = await fetch('/api/comment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ postContent, tone })
+                });
+                const data = await response.json();
+                resultDiv.innerHTML = `<pre class="success">${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">エラー: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -32,3 +32,21 @@ export {
   REQUIRED_COOKIE_NAMES,
   DEFAULT_REFRESH_CONFIG,
 } from './types';
+
+// Session Auto-Refresh
+export {
+  SessionRefresher,
+  createSessionRefresher,
+} from './sessionRefresher';
+
+export {
+  RefreshScheduler,
+  createRefreshScheduler,
+  getGlobalScheduler,
+  startGlobalScheduler,
+  stopGlobalScheduler,
+  DEFAULT_SCHEDULER_CONFIG,
+  type SchedulerConfig,
+  type SchedulerState,
+  type SchedulerEvents,
+} from './refreshScheduler';

@@ -7,6 +7,7 @@ import {
   detectHtmlResponseType,
   InstagramHtmlResponseError,
 } from './instagram/api/apiClient.js';
+import { safeJsonParseOrNull } from '../utils/safeJsonParse.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
@@ -78,11 +79,9 @@ export class InstagramScraperService {
         return await this.getReelsFromHTML(username, limit);
       }
 
-      // Parse JSON
-      let data: any;
-      try {
-        data = JSON.parse(text);
-      } catch {
+      // Parse JSON safely
+      const data = safeJsonParseOrNull<any>(text, `web_profile_info/${username}`);
+      if (!data) {
         console.error('[Scraper] Failed to parse JSON response');
         return await this.getReelsFromHTML(username, limit);
       }
@@ -141,10 +140,8 @@ export class InstagramScraperService {
       const scriptMatch = html.match(/<script type="application\/json"[^>]*>(\{.*?"xdt_api__v1__clips__user__connection_v2".*?\})<\/script>/s);
 
       if (scriptMatch) {
-        let jsonData: any;
-        try {
-          jsonData = JSON.parse(scriptMatch[1]);
-        } catch {
+        const jsonData = safeJsonParseOrNull<any>(scriptMatch[1], `embedded JSON/${username}`);
+        if (!jsonData) {
           console.error('[Scraper] Failed to parse embedded JSON data');
           return [];
         }
@@ -169,7 +166,10 @@ export class InstagramScraperService {
       // 代替: SharedData から抽出
       const sharedDataMatch = html.match(/window\._sharedData\s*=\s*(\{.+?\});<\/script>/);
       if (sharedDataMatch) {
-        const sharedData = JSON.parse(sharedDataMatch[1]);
+        const sharedData = safeJsonParseOrNull<any>(sharedDataMatch[1], `sharedData/${username}`);
+        if (!sharedData) {
+          return [];
+        }
         const mediaNodes = sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user?.edge_owner_to_timeline_media?.edges || [];
 
         return mediaNodes
@@ -215,9 +215,19 @@ export class InstagramScraperService {
       let authorUsername = '';
 
       if (oembedRes.ok) {
-        const oembed = await oembedRes.json() as any;
-        title = oembed.title || '';
-        authorUsername = oembed.author_name || '';
+        const oembedText = await oembedRes.text();
+
+        // Check for HTML response before parsing JSON
+        if (isHtmlResponse(oembedText)) {
+          const responseType = detectHtmlResponseType(oembedText);
+          console.error(`[Scraper] oEmbed returned HTML (${responseType}), skipping`);
+        } else {
+          const oembed = safeJsonParseOrNull<any>(oembedText, 'oEmbed API');
+          if (oembed) {
+            title = oembed.title || '';
+            authorUsername = oembed.author_name || '';
+          }
+        }
       }
 
       // 詳細情報を取得
@@ -255,10 +265,8 @@ export class InstagramScraperService {
           };
         }
 
-        let data: any;
-        try {
-          data = JSON.parse(infoText);
-        } catch {
+        const data = safeJsonParseOrNull<any>(infoText, `reel/${shortcode}`);
+        if (!data) {
           console.error('[Scraper] Failed to parse reel info JSON');
           return {
             id: shortcode,

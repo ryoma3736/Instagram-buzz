@@ -12,5 +12,11 @@ export { InstagramAuthService, instagramAuthService } from './instagramAuthServi
 export { InstagramApiService, instagramApiService } from './instagramApiService.js';
 // Instagram Scraper (API Key不要)
 export { InstagramScraperService, instagramScraperService } from './instagramScraperService.js';
+// Enhanced Instagram Scraper (Multiple strategies)
+export { InstagramEnhancedScraperService, instagramEnhancedScraperService } from './instagramEnhancedScraperService.js';
+// RapidAPI Integration (Premium fallback)
+export { InstagramRapidApiService, instagramRapidApiService } from './instagramRapidApiService.js';
+// Unified Instagram Service (Recommended)
+export { InstagramUnifiedService, instagramUnifiedService } from './instagramUnifiedService.js';
 // Database (SQLite)
 export { DatabaseService, databaseService } from './databaseService.js';

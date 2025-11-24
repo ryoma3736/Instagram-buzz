@@ -14,12 +14,17 @@
 import { BuzzReel } from '../../types/index.js';
 import { cookieAuthService } from './cookieAuthService.js';
 import { authenticatedScraperService } from './authenticatedScraperService.js';
-import { embedScraper, playwrightScraper } from './publicScraper/index.js';
+import {
+  embedScraper,
+  playwrightScraper,
+  googleSearchScraper,
+  popularAccountsScraper,
+} from './publicScraper/index.js';
 
 /**
  * Strategy types available for scraping
  */
-export type ScrapingStrategy = 'authenticated' | 'embed' | 'playwright' | 'fetch';
+export type ScrapingStrategy = 'authenticated' | 'embed' | 'playwright' | 'fetch' | 'google' | 'popular_accounts';
 
 /**
  * Result of a scraping attempt
@@ -46,7 +51,7 @@ export interface MultiStrategyConfig {
 }
 
 const DEFAULT_CONFIG: Required<MultiStrategyConfig> = {
-  strategyOrder: ['authenticated', 'embed', 'playwright', 'fetch'],
+  strategyOrder: ['authenticated', 'google', 'popular_accounts', 'embed', 'playwright', 'fetch'],
   enablePlaywright: true,
   strategyTimeout: 30000,
   verbose: true,
@@ -64,7 +69,7 @@ export class MultiStrategyService {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
     // Initialize stats
-    for (const strategy of ['authenticated', 'embed', 'playwright', 'fetch'] as ScrapingStrategy[]) {
+    for (const strategy of ['authenticated', 'embed', 'playwright', 'fetch', 'google', 'popular_accounts'] as ScrapingStrategy[]) {
       this.strategyStats.set(strategy, { success: 0, fail: 0 });
     }
   }
@@ -127,6 +132,18 @@ export class MultiStrategyService {
         case 'fetch':
           // Always available
           available.push(strategy);
+          break;
+        case 'google':
+          // Google search requires Playwright
+          if (await this.isPlaywrightAvailable()) {
+            available.push(strategy);
+          }
+          break;
+        case 'popular_accounts':
+          // Popular accounts requires Playwright
+          if (await this.isPlaywrightAvailable()) {
+            available.push(strategy);
+          }
           break;
       }
     }
@@ -316,6 +333,22 @@ export class MultiStrategyService {
               authenticatedScraperService.searchByHashtag(hashtag, limit),
               this.config.strategyTimeout,
               'Authenticated strategy timeout'
+            );
+            break;
+
+          case 'google':
+            result = await this.withTimeout(
+              googleSearchScraper.getReelsByHashtag(hashtag, limit),
+              this.config.strategyTimeout,
+              'Google search strategy timeout'
+            );
+            break;
+
+          case 'popular_accounts':
+            result = await this.withTimeout(
+              popularAccountsScraper.searchByKeyword(hashtag, limit),
+              this.config.strategyTimeout,
+              'Popular accounts strategy timeout'
             );
             break;
 
@@ -514,6 +547,8 @@ export class MultiStrategyService {
    */
   async cleanup(): Promise<void> {
     await playwrightScraper.close();
+    await googleSearchScraper.close();
+    await popularAccountsScraper.close();
   }
 }
 

@@ -19,3 +19,17 @@ export {
   playwrightScraper,
 } from './playwrightScraper.js';
 export type { PlaywrightScraperConfig } from './playwrightScraper.js';
+
+// Google Search-based Scraper
+export {
+  GoogleSearchScraper,
+  googleSearchScraper,
+} from './googleSearchScraper.js';
+export type { GoogleSearchScraperConfig } from './googleSearchScraper.js';
+
+// Popular Accounts-based Scraper
+export {
+  PopularAccountsScraper,
+  popularAccountsScraper,
+} from './popularAccountsScraper.js';
+export type { PopularAccountsScraperConfig } from './popularAccountsScraper.js';

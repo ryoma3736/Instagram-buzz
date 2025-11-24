@@ -19,12 +19,14 @@ import {
   playwrightScraper,
   googleSearchScraper,
   popularAccountsScraper,
+  duckduckgoScraper,
+  exploreScraper,
 } from './publicScraper/index.js';
 
 /**
  * Strategy types available for scraping
  */
-export type ScrapingStrategy = 'authenticated' | 'embed' | 'playwright' | 'fetch' | 'google' | 'popular_accounts';
+export type ScrapingStrategy = 'authenticated' | 'embed' | 'playwright' | 'fetch' | 'google' | 'popular_accounts' | 'duckduckgo' | 'explore';
 
 /**
  * Result of a scraping attempt
@@ -51,7 +53,8 @@ export interface MultiStrategyConfig {
 }
 
 const DEFAULT_CONFIG: Required<MultiStrategyConfig> = {
-  strategyOrder: ['authenticated', 'google', 'popular_accounts', 'embed', 'playwright', 'fetch'],
+  // Optimized strategy order: duckduckgo first (more lenient), then explore, embed, playwright
+  strategyOrder: ['authenticated', 'duckduckgo', 'explore', 'embed', 'playwright', 'popular_accounts', 'google', 'fetch'],
   enablePlaywright: true,
   strategyTimeout: 30000,
   verbose: true,
@@ -69,7 +72,7 @@ export class MultiStrategyService {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
     // Initialize stats
-    for (const strategy of ['authenticated', 'embed', 'playwright', 'fetch', 'google', 'popular_accounts'] as ScrapingStrategy[]) {
+    for (const strategy of ['authenticated', 'embed', 'playwright', 'fetch', 'google', 'popular_accounts', 'duckduckgo', 'explore'] as ScrapingStrategy[]) {
       this.strategyStats.set(strategy, { success: 0, fail: 0 });
     }
   }
@@ -141,6 +144,18 @@ export class MultiStrategyService {
           break;
         case 'popular_accounts':
           // Popular accounts requires Playwright
+          if (await this.isPlaywrightAvailable()) {
+            available.push(strategy);
+          }
+          break;
+        case 'duckduckgo':
+          // DuckDuckGo requires Playwright
+          if (await this.isPlaywrightAvailable()) {
+            available.push(strategy);
+          }
+          break;
+        case 'explore':
+          // Explore requires Playwright
           if (await this.isPlaywrightAvailable()) {
             available.push(strategy);
           }
@@ -336,6 +351,22 @@ export class MultiStrategyService {
             );
             break;
 
+          case 'duckduckgo':
+            result = await this.withTimeout(
+              duckduckgoScraper.getReelsByHashtag(hashtag, limit),
+              this.config.strategyTimeout,
+              'DuckDuckGo search strategy timeout'
+            );
+            break;
+
+          case 'explore':
+            result = await this.withTimeout(
+              exploreScraper.getReelsByHashtag(hashtag, limit),
+              this.config.strategyTimeout,
+              'Explore strategy timeout'
+            );
+            break;
+
           case 'google':
             result = await this.withTimeout(
               googleSearchScraper.getReelsByHashtag(hashtag, limit),
@@ -409,6 +440,14 @@ export class MultiStrategyService {
             );
             break;
 
+          case 'explore':
+            result = await this.withTimeout(
+              exploreScraper.getTrendingReels(limit),
+              this.config.strategyTimeout,
+              'Explore strategy timeout'
+            );
+            break;
+
           case 'playwright':
             result = await this.withTimeout(
               playwrightScraper.getTrendingReels(limit),
@@ -417,6 +456,9 @@ export class MultiStrategyService {
             );
             break;
 
+          case 'duckduckgo':
+          case 'google':
+          case 'popular_accounts':
           case 'embed':
           case 'fetch':
             // These strategies don't support trending well
@@ -549,6 +591,8 @@ export class MultiStrategyService {
     await playwrightScraper.close();
     await googleSearchScraper.close();
     await popularAccountsScraper.close();
+    await duckduckgoScraper.close();
+    await exploreScraper.close();
   }
 }
 

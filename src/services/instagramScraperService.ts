@@ -1,15 +1,35 @@
-// Instagram スクレイピングサービス（API Key不要）
+// Instagram スクレイピングサービス（Cookie認証対応版）
 import { BuzzReel } from '../types/index.js';
+import { authenticatedScraperService } from './instagram/authenticatedScraperService.js';
+import { cookieAuthService } from './instagram/cookieAuthService.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
 export class InstagramScraperService {
+  /**
+   * Check if authenticated mode is available
+   */
+  isAuthenticated(): boolean {
+    return cookieAuthService.isConfigured();
+  }
 
   /**
    * 公開プロフィールからリールを取得
+   * Cookie認証が設定されている場合は認証付きAPIを使用
    */
   async getPublicReels(username: string, limit: number = 12): Promise<BuzzReel[]> {
-    console.log(`🔍 Fetching reels from @${username}...`);
+    console.log(`[Scraper] Fetching reels from @${username}...`);
+
+    // Try authenticated API first if available
+    if (this.isAuthenticated()) {
+      console.log('[Scraper] Using authenticated API');
+      const authReels = await authenticatedScraperService.getUserReels(username, limit);
+      if (authReels.length > 0) {
+        console.log(`[Scraper] Got ${authReels.length} reels via authenticated API`);
+        return authReels;
+      }
+      console.log('[Scraper] Authenticated API returned no results, falling back...');
+    }
 
     try {
       // Instagram Web API (非公式)
@@ -108,9 +128,21 @@ export class InstagramScraperService {
 
   /**
    * リールURLから直接情報を取得
+   * Cookie認証が設定されている場合は認証付きAPIを使用
    */
   async getReelByUrl(url: string): Promise<BuzzReel | null> {
-    console.log(`📥 Fetching reel: ${url}`);
+    console.log(`[Scraper] Fetching reel: ${url}`);
+
+    // Try authenticated API first if available
+    if (this.isAuthenticated()) {
+      console.log('[Scraper] Using authenticated API for reel fetch');
+      const reel = await authenticatedScraperService.getReelByUrl(url);
+      if (reel) {
+        console.log('[Scraper] Got reel via authenticated API');
+        return reel;
+      }
+      console.log('[Scraper] Authenticated API returned no result, falling back...');
+    }
 
     const shortcode = this.extractShortcode(url);
     if (!shortcode) return null;
@@ -179,9 +211,21 @@ export class InstagramScraperService {
 
   /**
    * ハッシュタグでリールを検索
+   * Cookie認証が設定されている場合は認証付きAPIを使用
    */
   async searchByHashtag(hashtag: string, limit: number = 20): Promise<BuzzReel[]> {
-    console.log(`#️⃣ Searching #${hashtag}...`);
+    console.log(`[Scraper] Searching #${hashtag}...`);
+
+    // Try authenticated API first if available
+    if (this.isAuthenticated()) {
+      console.log('[Scraper] Using authenticated API for hashtag search');
+      const authReels = await authenticatedScraperService.searchByHashtag(hashtag, limit);
+      if (authReels.length > 0) {
+        console.log(`[Scraper] Got ${authReels.length} reels via authenticated API`);
+        return authReels;
+      }
+      console.log('[Scraper] Authenticated API returned no results, falling back...');
+    }
 
     try {
       const tag = hashtag.replace(/^#/, '');
@@ -219,9 +263,21 @@ export class InstagramScraperService {
 
   /**
    * トレンドリールを取得
+   * Cookie認証が設定されている場合は認証付きAPIを使用
    */
   async getTrendingReels(limit: number = 20): Promise<BuzzReel[]> {
-    console.log('🔥 Fetching trending reels...');
+    console.log('[Scraper] Fetching trending reels...');
+
+    // Try authenticated API first if available
+    if (this.isAuthenticated()) {
+      console.log('[Scraper] Using authenticated API for trending reels');
+      const authReels = await authenticatedScraperService.getTrendingReels(limit);
+      if (authReels.length > 0) {
+        console.log(`[Scraper] Got ${authReels.length} trending reels via authenticated API`);
+        return authReels;
+      }
+      console.log('[Scraper] Authenticated API returned no results, falling back...');
+    }
 
     try {
       const url = 'https://www.instagram.com/reels/';

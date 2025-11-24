@@ -74,3 +74,18 @@ export {
   StorageResult,
   LoadResult,
 } from './cookieStorage.js';
+
+// Cookie Authentication (Issue #19)
+export {
+  CookieAuthService,
+  cookieAuthService,
+  CookieEnvConfig,
+  CookieAuthResult,
+} from './cookieAuthService.js';
+
+// Authenticated Scraper (Issue #19)
+export {
+  AuthenticatedScraperService,
+  authenticatedScraperService,
+  AuthenticatedScraperConfig,
+} from './authenticatedScraperService.js';

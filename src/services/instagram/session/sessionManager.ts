@@ -4,7 +4,7 @@
  */
 
 import { SessionData, CookieData, RefreshConfig, DEFAULT_REFRESH_CONFIG } from './types';
-import { ExpiryChecker, ExpiryCheckResult } from './expiryChecker';
+import { ExpiryChecker } from './expiryChecker';
 import { SessionValidator, ValidationResult } from './sessionValidator';
 
 /**

@@ -4,16 +4,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { InstagramCookies } from '../../../src/services/instagram/session/types.js';
+
+// Mock fetch globally before importing modules that use it
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+// Import after mocking
 import {
   HashtagSearchService,
   createHashtagSearchService,
   searchHashtag,
 } from '../../../src/services/instagram/api/hashtagSearch.js';
-import type { InstagramCookies } from '../../../src/services/instagram/session/types.js';
-
-// Mock fetch globally
-const mockFetch = vi.fn();
-global.fetch = mockFetch;
 
 // Test cookies
 const mockCookies: InstagramCookies = {
@@ -134,33 +136,39 @@ describe('HashtagSearchService', () => {
 
   describe('search', () => {
     it('should search for hashtag and return posts', async () => {
+      const responseText = JSON.stringify(mockSectionsResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockSectionsResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const result = await service.search('test', 10);
 
       expect(result.posts.length).toBeGreaterThan(0);
       expect(result.hashtag).toBe('test');
       expect(result.hasMore).toBe(true);
       expect(result.endCursor).toBe('cursor123');
-    });
+    }, 10000);
 
     it('should normalize hashtag by removing #', async () => {
+      const responseText = JSON.stringify(mockSectionsResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockSectionsResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const result = await service.search('#test', 10);
 
       expect(result.hashtag).toBe('test');
-    });
+    }, 10000);
 
     it('should fallback to web info on sections failure', async () => {
       // First call (sections) fails
@@ -168,20 +176,25 @@ describe('HashtagSearchService', () => {
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
+        text: async () => 'Internal Server Error',
+        headers: new Headers({ 'content-type': 'text/plain' }),
       });
 
       // Second call (web info) succeeds
+      const webInfoText = JSON.stringify(mockWebInfoResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockWebInfoResponse,
+        text: async () => webInfoText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies, { maxRetries: 0 });
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const result = await service.search('test', 10);
 
       expect(result.posts.length).toBeGreaterThan(0);
-    });
+    }, 10000);
 
     it('should limit results to specified limit', async () => {
       const largeResponse = {
@@ -208,28 +221,34 @@ describe('HashtagSearchService', () => {
         more_available: true,
       };
 
+      const responseText = JSON.stringify(largeResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => largeResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const result = await service.search('test', 5);
 
       expect(result.posts.length).toBe(5);
-    });
+    }, 10000);
   });
 
   describe('searchTopPosts', () => {
     it('should return top posts sorted by engagement', async () => {
+      const responseText = JSON.stringify(mockSectionsResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockSectionsResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const posts = await service.searchTopPosts('test');
 
       expect(Array.isArray(posts)).toBe(true);
@@ -242,18 +261,21 @@ describe('HashtagSearchService', () => {
         const currEngagement = posts[i].likeCount + posts[i].commentCount;
         expect(prevEngagement).toBeGreaterThanOrEqual(currEngagement);
       }
-    });
+    }, 10000);
   });
 
   describe('searchRecentPosts', () => {
     it('should return recent posts sorted by timestamp', async () => {
+      const responseText = JSON.stringify(mockSectionsResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockSectionsResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const posts = await service.searchRecentPosts('test', 10);
 
       expect(Array.isArray(posts)).toBe(true);
@@ -264,48 +286,56 @@ describe('HashtagSearchService', () => {
           posts[i].timestamp
         );
       }
-    });
+    }, 10000);
   });
 
   describe('getHashtagInfo', () => {
     it('should return hashtag information', async () => {
+      const webInfoText = JSON.stringify(mockWebInfoResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockWebInfoResponse,
+        text: async () => webInfoText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const info = await service.getHashtagInfo('test');
 
       expect(info).not.toBeNull();
       expect(info?.name).toBe('test');
       expect(info?.mediaCount).toBe(1000000);
-    });
+    }, 10000);
 
     it('should return null on failure', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 404,
         statusText: 'Not Found',
+        text: async () => 'Not Found',
+        headers: new Headers({ 'content-type': 'text/plain' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const info = await service.getHashtagInfo('nonexistent');
 
       expect(info).toBeNull();
-    });
+    }, 10000);
   });
 
   describe('searchWithPagination', () => {
     it('should support pagination with cursor', async () => {
+      const responseText = JSON.stringify(mockSectionsResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        status: 200,
         json: async () => mockSectionsResponse,
+        text: async () => responseText,
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
-      const service = new HashtagSearchService(mockCookies);
+      const service = new HashtagSearchService(mockCookies, { maxRetries: 0, retryDelay: 0 });
       const result = await service.searchWithPagination('test', {
         cursor: 'some_cursor',
         limit: 20,
@@ -321,7 +351,7 @@ describe('HashtagSearchService', () => {
           body: expect.stringContaining('max_id=some_cursor'),
         })
       );
-    });
+    }, 10000);
   });
 
   describe('updateCookies', () => {

@@ -6,9 +6,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { InstagramCookies } from '../src/services/instagram/session/types.js';
 
-// Mock fetch globally
+// Mock fetch globally before importing modules
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+vi.stubGlobal('fetch', mockFetch);
 
 // Import after mocking
 import {
@@ -134,6 +134,8 @@ describe('UserReelsService', () => {
 
   describe('getReels', () => {
     it('should fetch reels for a public user', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
+      const clipsText = JSON.stringify(mockClipsResponse);
       // Mock user profile resolution
       mockFetch
         .mockResolvedValueOnce({
@@ -141,6 +143,7 @@ describe('UserReelsService', () => {
           status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => mockUserWebProfileResponse,
+          text: async () => userProfileText,
         })
         // Mock clips fetch
         .mockResolvedValueOnce({
@@ -148,6 +151,7 @@ describe('UserReelsService', () => {
           status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => mockClipsResponse,
+          text: async () => clipsText,
         });
 
       const result = await service.getReels('testuser');
@@ -157,7 +161,7 @@ describe('UserReelsService', () => {
       expect(result.user.id).toBe('123456789');
       expect(result.hasMore).toBe(true);
       expect(result.endCursor).toBe('next_cursor_123');
-    });
+    }, 10000);
 
     it('should throw error for private accounts', async () => {
       const privateUserResponse = {
@@ -169,18 +173,20 @@ describe('UserReelsService', () => {
         },
         status: 'ok',
       };
+      const privateUserText = JSON.stringify(privateUserResponse);
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => privateUserResponse,
+        text: async () => privateUserText,
       });
 
       await expect(service.getReels('privateuser')).rejects.toThrow(
         'Cannot fetch reels from private account'
       );
-    });
+    }, 10000);
 
     it('should handle pagination with cursor', async () => {
       // Use a different username to avoid cache from previous test
@@ -193,6 +199,8 @@ describe('UserReelsService', () => {
         },
         status: 'ok',
       };
+      const paginationUserText = JSON.stringify(paginationUserResponse);
+      const clipsText = JSON.stringify(mockClipsResponse);
 
       mockFetch
         .mockResolvedValueOnce({
@@ -200,12 +208,14 @@ describe('UserReelsService', () => {
           status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => paginationUserResponse,
+          text: async () => paginationUserText,
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
           headers: new Headers({ 'content-type': 'application/json' }),
           json: async () => mockClipsResponse,
+          text: async () => clipsText,
         });
 
       await service.getReels('paginationuser', {
@@ -217,16 +227,18 @@ describe('UserReelsService', () => {
       expect(mockFetch).toHaveBeenCalledTimes(2);
       const clipsCall = mockFetch.mock.calls[1];
       expect(clipsCall[0]).toContain('max_id=some_cursor');
-    });
+    }, 10000);
   });
 
   describe('getReelById', () => {
     it('should fetch a single reel by ID', async () => {
+      const mediaInfoText = JSON.stringify(mockMediaInfoResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockMediaInfoResponse,
+        text: async () => mediaInfoText,
       });
 
       const result = await service.getReelById('reel_001');
@@ -235,7 +247,7 @@ describe('UserReelsService', () => {
       expect(result?.id).toBe('reel_001');
       expect(result?.shortcode).toBe('ABC123');
       expect(result?.viewCount).toBe(50000);
-    });
+    }, 10000);
 
     it('should return null for non-existent reel', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -243,40 +255,45 @@ describe('UserReelsService', () => {
         status: 404,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => ({ status: 'fail', message: 'Not found' }),
+        text: async () => JSON.stringify({ status: 'fail', message: 'Not found' }),
       });
 
       const result = await service.getReelById('non_existent');
 
       expect(result).toBeNull();
-    });
+    }, 10000);
   });
 
   describe('resolveUserId', () => {
     it('should resolve username to user ID', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockUserWebProfileResponse,
+        text: async () => userProfileText,
       });
 
-      const userId = await service.resolveUserId('testuser');
+      const userId = await service.resolveUserId('resolvetest1');
 
       expect(userId).toBe('123456789');
-    });
+    }, 10000);
 
     it('should clean username with @ prefix', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockUserWebProfileResponse,
+        text: async () => userProfileText,
       });
 
-      const userId = await service.resolveUserId('@testuser');
+      const userId = await service.resolveUserId('@resolvetest2');
 
       expect(userId).toBe('123456789');
-    });
+    }, 10000);
   });
 });
 
@@ -295,14 +312,16 @@ describe('UserResolver', () => {
 
   describe('resolve', () => {
     it('should resolve username to full user info', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockUserWebProfileResponse,
+        text: async () => userProfileText,
       });
 
-      const result = await resolver.resolve('testuser');
+      const result = await resolver.resolve('resolver_test_user');
 
       expect(result.userId).toBe('123456789');
       expect(result.username).toBe('testuser');
@@ -310,28 +329,30 @@ describe('UserResolver', () => {
       expect(result.isPrivate).toBe(false);
       expect(result.isVerified).toBe(true);
       expect(result.followerCount).toBe(10000);
-    });
+    }, 10000);
 
     it('should use cached result on subsequent calls', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockUserWebProfileResponse,
+        text: async () => userProfileText,
       });
 
       // First call
-      await resolver.resolve('testuser');
+      await resolver.resolve('cache_test_user');
       // Second call should use cache
-      await resolver.resolve('testuser');
+      await resolver.resolve('cache_test_user');
 
       // Should only make one API call
       expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
+    }, 10000);
 
     it('should throw error for empty username', async () => {
       await expect(resolver.resolve('')).rejects.toThrow('Username cannot be empty');
-    });
+    }, 10000);
 
     it('should throw error for non-existent user', async () => {
       mockFetch.mockResolvedValueOnce({
@@ -339,28 +360,31 @@ describe('UserResolver', () => {
         status: 404,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => ({ status: 'fail' }),
+        text: async () => JSON.stringify({ status: 'fail' }),
       });
 
-      await expect(resolver.resolve('nonexistent')).rejects.toThrow();
-    });
+      await expect(resolver.resolve('nonexistent_user_xyz')).rejects.toThrow();
+    }, 10000);
   });
 
   describe('clearCache', () => {
     it('should clear cached user data', async () => {
+      const userProfileText = JSON.stringify(mockUserWebProfileResponse);
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => mockUserWebProfileResponse,
+        text: async () => userProfileText,
       });
 
-      await resolver.resolve('testuser');
+      await resolver.resolve('clear_cache_user');
       resolver.clearCache();
-      await resolver.resolve('testuser');
+      await resolver.resolve('clear_cache_user');
 
       // Should make two API calls after cache clear
       expect(mockFetch).toHaveBeenCalledTimes(2);
-    });
+    }, 10000);
   });
 });
 

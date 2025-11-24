@@ -1,0 +1,17 @@
+github:
+  repository: ryoma3736/Instagram-buzz
+  defaultPrivate: false
+
+project:
+  gitignoreTemplate: Node
+  licenseTemplate: mit
+
+workflows:
+  autoLabel: true
+  autoReview: true
+  autoSync: true
+
+cli:
+  language: ja
+  theme: default
+  verboseErrors: true

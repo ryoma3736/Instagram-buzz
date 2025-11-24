@@ -1,0 +1,38 @@
+{
+  "project": {
+    "name": "customer_cloud",
+    "version": "1.0.0",
+    "description": "Miyabi Framework - AI-driven autonomous development environment",
+    "author": "seiichi-w77",
+    "created": "2025-11-01"
+  },
+  "settings": {
+    "auto_backup": true,
+    "backup_extensions": [".md", ".yaml", ".json", ".html", ".css"],
+    "log_level": "info",
+    "security": {
+      "block_dangerous_commands": true,
+      "dangerous_patterns": ["rm -rf", "sudo", "dd if=", "> /dev/"]
+    }
+  },
+  "tools": {
+    "github": {
+      "enabled": true,
+      "repository": "ryoma3736/tochigi-platform"
+    }
+  },
+  "hooks": {
+    "enabled": true,
+    "session_start": true,
+    "session_end": true,
+    "pre_tool_use": true,
+    "post_tool_use": true,
+    "user_prompt_submit": true,
+    "notification": true,
+    "stop": true,
+    "subagent_stop": true,
+    "pre_compact": true,
+    "before_edit": true,
+    "after_write": true
+  }
+}

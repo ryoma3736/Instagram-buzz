@@ -1,15 +1,25 @@
 /**
  * Instagram Authenticated Scraper Service
  * Provides cookie-authenticated access to Instagram data
+ * With Playwright fallback when API access fails (Issue #45)
  * @module services/instagram/authenticatedScraperService
  */
 
 import { BuzzReel } from '../../types/index.js';
 import { cookieAuthService } from './cookieAuthService.js';
-import { createApiClient, ApiClient, InstagramApiError } from './api/apiClient.js';
+import {
+  createApiClient,
+  ApiClient,
+  InstagramApiError,
+  InstagramHtmlResponseError,
+} from './api/apiClient.js';
 import { HashtagSearchService, createHashtagSearchService } from './api/hashtagSearch.js';
 import type { InstagramCookies } from './session/types.js';
 import { DEFAULT_API_CONFIG } from './api/types.js';
+import {
+  PlaywrightFallbackService,
+  isPlaywrightAvailable,
+} from './playwright/playwrightFallback.js';
 
 /**
  * Configuration for authenticated scraper
@@ -17,6 +27,8 @@ import { DEFAULT_API_CONFIG } from './api/types.js';
 export interface AuthenticatedScraperConfig {
   /** Whether to fallback to unauthenticated methods on failure */
   fallbackToUnauthenticated?: boolean;
+  /** Whether to use Playwright fallback on API failure */
+  usePlaywrightFallback?: boolean;
   /** Request timeout in milliseconds */
   timeout?: number;
   /** Maximum retries on failure */
@@ -25,6 +37,7 @@ export interface AuthenticatedScraperConfig {
 
 const DEFAULT_CONFIG: Required<AuthenticatedScraperConfig> = {
   fallbackToUnauthenticated: true,
+  usePlaywrightFallback: true,
   timeout: 30000,
   maxRetries: 2,
 };
@@ -32,14 +45,36 @@ const DEFAULT_CONFIG: Required<AuthenticatedScraperConfig> = {
 /**
  * Authenticated Scraper Service
  * Uses cookie authentication to access Instagram APIs
+ * With Playwright fallback when API access fails (Issue #45)
  */
 export class AuthenticatedScraperService {
   private config: Required<AuthenticatedScraperConfig>;
   private apiClient: ApiClient | null = null;
   private hashtagService: HashtagSearchService | null = null;
+  private playwrightFallback: PlaywrightFallbackService | null = null;
+  private playwrightAvailable: boolean | null = null;
 
   constructor(config: AuthenticatedScraperConfig = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    if (this.config.usePlaywrightFallback) {
+      this.playwrightFallback = new PlaywrightFallbackService({
+        timeout: this.config.timeout,
+      });
+    }
+  }
+
+  /**
+   * Check if Playwright fallback is available
+   */
+  async isPlaywrightFallbackAvailable(): Promise<boolean> {
+    if (!this.config.usePlaywrightFallback) {
+      return false;
+    }
+    if (this.playwrightAvailable !== null) {
+      return this.playwrightAvailable;
+    }
+    this.playwrightAvailable = await isPlaywrightAvailable();
+    return this.playwrightAvailable;
   }
 
   /**
@@ -69,13 +104,15 @@ export class AuthenticatedScraperService {
 
   /**
    * Search reels by hashtag using authenticated API
+   * Falls back to Playwright when API access fails (Issue #45)
    */
   async searchByHashtag(hashtag: string, limit: number = 20): Promise<BuzzReel[]> {
     console.log(`[AuthScraper] Searching #${hashtag} (authenticated: ${this.isAuthenticated()})`);
 
     if (!this.initializeClient() || !this.hashtagService) {
       console.log('[AuthScraper] Falling back to unauthenticated search');
-      return [];
+      // Try Playwright fallback
+      return this.searchByHashtagWithPlaywrightFallback(hashtag, limit);
     }
 
     try {
@@ -91,6 +128,17 @@ export class AuthenticatedScraperService {
     } catch (error) {
       console.error('[AuthScraper] Hashtag search failed:', error);
 
+      // Handle HTML response error (Issue #43)
+      if (error instanceof InstagramHtmlResponseError) {
+        console.error(`[AuthScraper] HTML response: ${error.responseType}`);
+        console.error(`[AuthScraper] ${error.getUserMessage()}`);
+
+        if (error.responseType === 'login_required') {
+          console.log('[AuthScraper] Clearing invalid cookies due to login required');
+          cookieAuthService.clearCookies();
+        }
+      }
+
       if (error instanceof InstagramApiError) {
         if (error.statusCode === 401 || error.statusCode === 403) {
           console.log('[AuthScraper] Authentication failed - cookies may be expired');
@@ -98,18 +146,46 @@ export class AuthenticatedScraperService {
         }
       }
 
-      return [];
+      // Try Playwright fallback on API failure (Issue #45)
+      console.log('[AuthScraper] Attempting Playwright fallback...');
+      return this.searchByHashtagWithPlaywrightFallback(hashtag, limit);
     }
   }
 
   /**
+   * Playwright fallback for hashtag search (Issue #45)
+   */
+  private async searchByHashtagWithPlaywrightFallback(
+    hashtag: string,
+    limit: number
+  ): Promise<BuzzReel[]> {
+    if (!this.playwrightFallback || !(await this.isPlaywrightFallbackAvailable())) {
+      console.log('[AuthScraper] Playwright fallback not available');
+      return [];
+    }
+
+    const cookies = cookieAuthService.getCookies();
+    const result = await this.playwrightFallback.searchByHashtag(hashtag, limit, cookies ?? undefined);
+
+    if (result.success && result.data) {
+      console.log(`[AuthScraper] Playwright fallback found ${result.data.length} reels`);
+      return result.data;
+    }
+
+    console.log(`[AuthScraper] Playwright fallback failed: ${result.error}`);
+    return [];
+  }
+
+  /**
    * Get user's reels using authenticated API
+   * Falls back to Playwright when API access fails (Issue #45)
    */
   async getUserReels(username: string, limit: number = 12): Promise<BuzzReel[]> {
     console.log(`[AuthScraper] Getting reels for @${username}`);
 
     if (!this.initializeClient() || !this.apiClient) {
-      return [];
+      // Try Playwright fallback
+      return this.getUserReelsWithPlaywrightFallback(username, limit);
     }
 
     try {
@@ -117,7 +193,8 @@ export class AuthenticatedScraperService {
       const userInfo = await this.getUserInfo(username);
       if (!userInfo) {
         console.log(`[AuthScraper] User @${username} not found`);
-        return [];
+        // Try Playwright fallback
+        return this.getUserReelsWithPlaywrightFallback(username, limit);
       }
 
       // Fetch user's clips/reels
@@ -137,8 +214,46 @@ export class AuthenticatedScraperService {
       return reels;
     } catch (error) {
       console.error('[AuthScraper] User reels fetch failed:', error);
+
+      // Handle HTML response error (Issue #43)
+      if (error instanceof InstagramHtmlResponseError) {
+        console.error(`[AuthScraper] HTML response: ${error.responseType}`);
+        console.error(`[AuthScraper] ${error.getUserMessage()}`);
+
+        if (error.responseType === 'login_required') {
+          console.log('[AuthScraper] Clearing invalid cookies due to login required');
+          cookieAuthService.clearCookies();
+        }
+      }
+
+      // Try Playwright fallback on API failure (Issue #45)
+      console.log('[AuthScraper] Attempting Playwright fallback...');
+      return this.getUserReelsWithPlaywrightFallback(username, limit);
+    }
+  }
+
+  /**
+   * Playwright fallback for user reels (Issue #45)
+   */
+  private async getUserReelsWithPlaywrightFallback(
+    username: string,
+    limit: number
+  ): Promise<BuzzReel[]> {
+    if (!this.playwrightFallback || !(await this.isPlaywrightFallbackAvailable())) {
+      console.log('[AuthScraper] Playwright fallback not available');
       return [];
     }
+
+    const cookies = cookieAuthService.getCookies();
+    const result = await this.playwrightFallback.getUserReels(username, limit, cookies ?? undefined);
+
+    if (result.success && result.data) {
+      console.log(`[AuthScraper] Playwright fallback found ${result.data.length} reels`);
+      return result.data;
+    }
+
+    console.log(`[AuthScraper] Playwright fallback failed: ${result.error}`);
+    return [];
   }
 
   /**
@@ -189,12 +304,25 @@ export class AuthenticatedScraperService {
       return reels.slice(0, limit);
     } catch (error) {
       console.error('[AuthScraper] Trending reels fetch failed:', error);
+
+      // Handle HTML response error (Issue #43)
+      if (error instanceof InstagramHtmlResponseError) {
+        console.error(`[AuthScraper] HTML response: ${error.responseType}`);
+        console.error(`[AuthScraper] ${error.getUserMessage()}`);
+
+        if (error.responseType === 'login_required') {
+          console.log('[AuthScraper] Clearing invalid cookies due to login required');
+          cookieAuthService.clearCookies();
+        }
+      }
+
       return [];
     }
   }
 
   /**
    * Get reel by URL
+   * Falls back to Playwright when API access fails (Issue #45)
    */
   async getReelByUrl(url: string): Promise<BuzzReel | null> {
     const shortcode = this.extractShortcode(url);
@@ -206,7 +334,8 @@ export class AuthenticatedScraperService {
     console.log(`[AuthScraper] Fetching reel: ${shortcode}`);
 
     if (!this.initializeClient() || !this.apiClient) {
-      return null;
+      // Try Playwright fallback
+      return this.getReelByUrlWithPlaywrightFallback(url);
     }
 
     try {
@@ -216,14 +345,57 @@ export class AuthenticatedScraperService {
       const items = (response.items as Array<Record<string, unknown>>) || [];
       if (items.length === 0) {
         // Try alternative endpoint
-        return this.getReelByShortcode(shortcode);
+        const result = await this.getReelByShortcode(shortcode);
+        if (result) return result;
+        // Fall back to Playwright
+        return this.getReelByUrlWithPlaywrightFallback(url);
       }
 
       return this.parseReelItem(items[0]);
     } catch (error) {
       console.error('[AuthScraper] Reel fetch failed:', error);
-      return this.getReelByShortcode(shortcode);
+
+      // Handle HTML response error (Issue #43)
+      if (error instanceof InstagramHtmlResponseError) {
+        console.error(`[AuthScraper] HTML response: ${error.responseType}`);
+        console.error(`[AuthScraper] ${error.getUserMessage()}`);
+
+        if (error.responseType === 'login_required') {
+          console.log('[AuthScraper] Clearing invalid cookies due to login required');
+          cookieAuthService.clearCookies();
+        }
+        // Try Playwright fallback
+        console.log('[AuthScraper] Attempting Playwright fallback...');
+        return this.getReelByUrlWithPlaywrightFallback(url);
+      }
+
+      const result = await this.getReelByShortcode(shortcode);
+      if (result) return result;
+      // Try Playwright fallback on API failure (Issue #45)
+      console.log('[AuthScraper] Attempting Playwright fallback...');
+      return this.getReelByUrlWithPlaywrightFallback(url);
     }
+  }
+
+  /**
+   * Playwright fallback for reel by URL (Issue #45)
+   */
+  private async getReelByUrlWithPlaywrightFallback(url: string): Promise<BuzzReel | null> {
+    if (!this.playwrightFallback || !(await this.isPlaywrightFallbackAvailable())) {
+      console.log('[AuthScraper] Playwright fallback not available');
+      return null;
+    }
+
+    const cookies = cookieAuthService.getCookies();
+    const result = await this.playwrightFallback.getReelByUrl(url, cookies ?? undefined);
+
+    if (result.success && result.data) {
+      console.log('[AuthScraper] Playwright fallback successfully fetched reel');
+      return result.data;
+    }
+
+    console.log(`[AuthScraper] Playwright fallback failed: ${result.error}`);
+    return null;
   }
 
   /**

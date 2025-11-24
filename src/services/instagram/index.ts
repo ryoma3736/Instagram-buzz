@@ -89,3 +89,12 @@ export {
   authenticatedScraperService,
   AuthenticatedScraperConfig,
 } from './authenticatedScraperService.js';
+
+// Playwright Fallback (Issue #45)
+export {
+  PlaywrightFallbackService,
+  playwrightFallbackService,
+  isPlaywrightAvailable,
+  PlaywrightFallbackConfig,
+  PlaywrightFallbackResult,
+} from './playwright/index.js';

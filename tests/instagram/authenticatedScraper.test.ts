@@ -43,7 +43,10 @@ describe('AuthenticatedScraperService', () => {
       delete process.env.INSTAGRAM_SESSION_ID;
       delete process.env.INSTAGRAM_CSRF_TOKEN;
 
-      const service = new AuthenticatedScraperService();
+      // Disable Playwright fallback to test API-only behavior
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: false,
+      });
       const result = await service.searchByHashtag('test', 5);
 
       expect(result).toEqual([]);
@@ -55,7 +58,10 @@ describe('AuthenticatedScraperService', () => {
       delete process.env.INSTAGRAM_SESSION_ID;
       delete process.env.INSTAGRAM_CSRF_TOKEN;
 
-      const service = new AuthenticatedScraperService();
+      // Disable Playwright fallback to test API-only behavior
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: false,
+      });
       const result = await service.getUserReels('testuser', 5);
 
       expect(result).toEqual([]);
@@ -86,7 +92,10 @@ describe('AuthenticatedScraperService', () => {
       delete process.env.INSTAGRAM_SESSION_ID;
       delete process.env.INSTAGRAM_CSRF_TOKEN;
 
-      const service = new AuthenticatedScraperService();
+      // Disable Playwright fallback to test API-only behavior
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: false,
+      });
       const result = await service.getReelByUrl('https://www.instagram.com/reel/ABC123/');
 
       expect(result).toBeNull();
@@ -121,6 +130,43 @@ describe('AuthenticatedScraperService', () => {
         maxRetries: 5,
       });
       expect(service).toBeInstanceOf(AuthenticatedScraperService);
+    });
+
+    it('should accept usePlaywrightFallback config (Issue #45)', () => {
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: true,
+      });
+      expect(service).toBeInstanceOf(AuthenticatedScraperService);
+    });
+
+    it('should allow disabling Playwright fallback (Issue #45)', () => {
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: false,
+      });
+      expect(service).toBeInstanceOf(AuthenticatedScraperService);
+    });
+  });
+
+  describe('Playwright fallback (Issue #45)', () => {
+    it('should have isPlaywrightFallbackAvailable method', () => {
+      const service = new AuthenticatedScraperService();
+      expect(typeof service.isPlaywrightFallbackAvailable).toBe('function');
+    });
+
+    it('should return false when fallback is disabled', async () => {
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: false,
+      });
+      const result = await service.isPlaywrightFallbackAvailable();
+      expect(result).toBe(false);
+    });
+
+    it('should return boolean when checking availability', async () => {
+      const service = new AuthenticatedScraperService({
+        usePlaywrightFallback: true,
+      });
+      const result = await service.isPlaywrightFallbackAvailable();
+      expect(typeof result).toBe('boolean');
     });
   });
 });

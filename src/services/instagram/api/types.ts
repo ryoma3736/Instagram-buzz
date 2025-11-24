@@ -192,3 +192,119 @@ export const HASHTAG_API_ENDPOINTS = {
   /** Graphql hashtag query */
   HASHTAG_GRAPHQL: '/graphql/query/',
 } as const;
+
+// ============================================
+// User Reels Types (Issue #27)
+// ============================================
+
+/**
+ * Individual reel data structure
+ */
+export interface ReelData {
+  /** Unique reel identifier */
+  id: string;
+  /** Short URL code for the reel */
+  shortcode: string;
+  /** Full URL to the reel */
+  url: string;
+  /** Direct video URL (may require authentication) */
+  videoUrl: string;
+  /** Thumbnail image URL */
+  thumbnailUrl: string;
+  /** Reel caption/description */
+  caption: string;
+  /** Number of views */
+  viewCount: number;
+  /** Number of likes */
+  likeCount: number;
+  /** Number of comments */
+  commentCount: number;
+  /** Duration in seconds */
+  duration: number;
+  /** Unix timestamp when the reel was posted */
+  timestamp: number;
+}
+
+/**
+ * User profile information
+ */
+export interface UserProfile {
+  /** User's unique identifier */
+  id: string;
+  /** Username (handle) */
+  username: string;
+  /** Full display name */
+  fullName: string;
+  /** Profile picture URL */
+  profilePicUrl?: string;
+  /** Number of followers */
+  followerCount?: number;
+  /** Whether the account is verified */
+  isVerified?: boolean;
+  /** Whether the account is private */
+  isPrivate?: boolean;
+}
+
+/**
+ * Result of user reels fetch operation
+ */
+export interface UserReelsResult {
+  /** Array of reels from the user */
+  reels: ReelData[];
+  /** Whether more results are available */
+  hasMore: boolean;
+  /** Cursor for pagination */
+  endCursor: string | null;
+  /** User profile information */
+  user: UserProfile;
+}
+
+/**
+ * Options for fetching user reels
+ */
+export interface UserReelsOptions {
+  /** Maximum number of reels to retrieve (default: 12) */
+  limit?: number;
+  /** Pagination cursor for fetching more results */
+  cursor?: string;
+}
+
+/**
+ * User resolver result
+ */
+export interface UserResolverResult {
+  /** User ID */
+  userId: string;
+  /** Username */
+  username: string;
+  /** Full name */
+  fullName: string;
+  /** Profile picture URL */
+  profilePicUrl?: string;
+  /** Whether the account is private */
+  isPrivate: boolean;
+  /** Whether the account is verified */
+  isVerified: boolean;
+  /** Number of followers */
+  followerCount: number;
+  /** Number of following */
+  followingCount: number;
+  /** Number of posts */
+  mediaCount: number;
+}
+
+/**
+ * User Reels API endpoints
+ */
+export const USER_REELS_ENDPOINTS = {
+  /** Get user profile info from username */
+  USER_WEB_PROFILE: '/api/v1/users/web_profile_info/',
+  /** Get user info by ID */
+  USER_INFO: '/api/v1/users/{user_id}/info/',
+  /** Get user's clips/reels by user ID */
+  USER_CLIPS: '/api/v1/clips/user/{user_id}/',
+  /** Get single media/reel info */
+  MEDIA_INFO: '/api/v1/media/{media_id}/info/',
+  /** GraphQL user query */
+  USER_GRAPHQL: '/graphql/query/',
+} as const;

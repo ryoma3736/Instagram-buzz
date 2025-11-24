@@ -95,13 +95,36 @@ export const API_ENDPOINTS = {
 
 /**
  * Default API configuration
+ * Updated with latest User-Agent and headers for Issue #44
  */
 export const DEFAULT_API_CONFIG = {
   baseUrl: 'https://i.instagram.com',
   webBaseUrl: 'https://www.instagram.com',
-  userAgent: 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229237)',
+  /** Mobile iOS User-Agent - more reliable for API access */
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  /** Instagram Web App ID */
   appId: '936619743392459',
+  /** Instagram AJAX version identifier */
+  ajaxVersion: '1',
+  /** ASBD (App State Bundle Data) ID */
+  asbdId: '129477',
+  /** IG Capabilities header value */
+  igCapabilities: '3brTvw==',
   defaultLimit: 20,
+} as const;
+
+/**
+ * Alternative User-Agent configurations for different scenarios
+ */
+export const USER_AGENT_CONFIGS = {
+  /** iOS Safari - primary for web requests */
+  iOS: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  /** macOS Chrome - for desktop web requests */
+  macOSChrome: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  /** Android Instagram App - for mobile API endpoints */
+  androidApp: 'Instagram 275.0.0.27.98 Android (33/13; 420dpi; 1080x2400; samsung; SM-G991B; o1s; exynos2100; en_US; 458229237)',
+  /** iOS Instagram App - for mobile API endpoints */
+  iOSApp: 'Instagram 275.0.0.27.98 iOS (17_0; iPhone14,2; en_US; en-US; scale=3.00; 1170x2532; 458229237)',
 } as const;
 
 // ============================================

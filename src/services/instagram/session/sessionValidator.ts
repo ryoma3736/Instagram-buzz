@@ -1,9 +1,11 @@
 /**
  * セッション検証サービス
+ * Enhanced for Issue #44: Authentication header and cookie management improvements
  * @module services/instagram/session/sessionValidator
  */
 
-import { CookieData, SessionData } from './types';
+import { CookieData, SessionData } from './types.js';
+import { DEFAULT_API_CONFIG, USER_AGENT_CONFIGS } from '../api/types.js';
 
 /**
  * セッション検証結果
@@ -20,8 +22,6 @@ export interface ValidationResult {
  * Instagram APIエンドポイント
  */
 const INSTAGRAM_API_BASE = 'https://www.instagram.com';
-const USER_AGENT =
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 /**
  * セッション検証クラス
@@ -63,6 +63,7 @@ export class SessionValidator {
 
   /**
    * CookieでInstagram APIを呼び出して有効性を確認
+   * Enhanced for Issue #44: Using latest headers configuration
    */
   async validateCookies(cookies: CookieData[]): Promise<ValidationResult> {
     const checkedAt = new Date();
@@ -71,15 +72,43 @@ export class SessionValidator {
       const cookieString = this.cookiesToString(cookies);
       const csrfToken = cookies.find((c) => c.name === 'csrftoken')?.value || '';
 
+      // Build complete headers for Instagram API requests (Issue #44)
+      const headers: Record<string, string> = {
+        // Use latest iOS User-Agent for better compatibility
+        'User-Agent': DEFAULT_API_CONFIG.userAgent,
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9,ja;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+
+        // Cookie header
+        'Cookie': cookieString,
+
+        // Instagram-specific headers (Issue #44 requirements)
+        'X-IG-App-ID': DEFAULT_API_CONFIG.appId,
+        'X-Instagram-AJAX': DEFAULT_API_CONFIG.ajaxVersion,
+        'X-ASBD-ID': DEFAULT_API_CONFIG.asbdId,
+        'X-CSRFToken': csrfToken,
+        'X-IG-WWW-Claim': '0',
+        'X-Requested-With': 'XMLHttpRequest',
+
+        // Origin and referrer for CORS
+        'Origin': 'https://www.instagram.com',
+        'Referer': 'https://www.instagram.com/',
+
+        // Security fetch metadata headers
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+
+        // Cache control
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+      };
+
       const response = await fetch(`${INSTAGRAM_API_BASE}/api/v1/users/web_profile_info/?username=instagram`, {
         method: 'GET',
-        headers: {
-          'User-Agent': USER_AGENT,
-          'Cookie': cookieString,
-          'X-CSRFToken': csrfToken,
-          'X-IG-App-ID': '936619743392459',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
+        headers,
       });
 
       if (response.status === 401 || response.status === 403) {

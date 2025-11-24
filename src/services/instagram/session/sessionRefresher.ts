@@ -14,9 +14,10 @@ import type {
   RefreshEvents,
   RefreshStatus,
   AuthCredentials,
-} from './types';
-import { DEFAULT_REFRESH_CONFIG } from './types';
-import { SessionManager, type SessionStatus } from './sessionManager';
+} from './types.js';
+import { DEFAULT_REFRESH_CONFIG } from './types.js';
+import { SessionManager, type SessionStatus } from './sessionManager.js';
+import { DEFAULT_API_CONFIG } from '../api/types.js';
 
 /**
  * Session file paths
@@ -362,9 +363,9 @@ export class SessionRefresher {
       const browser = await playwright.chromium.launch({ headless: true });
 
       try {
+        // Use latest iOS User-Agent from configuration (Issue #44)
         const context = await browser.newContext({
-          userAgent:
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15',
+          userAgent: DEFAULT_API_CONFIG.userAgent,
         });
         const page = await context.newPage();
 

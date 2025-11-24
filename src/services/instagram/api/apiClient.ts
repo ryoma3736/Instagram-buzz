@@ -1,11 +1,12 @@
 /**
  * Instagram Authenticated API Client
  * Provides reusable HTTP client for authenticated Instagram requests
+ * Enhanced for Issue #44: Authentication header and cookie management improvements
  * @module services/instagram/api/apiClient
  */
 
-import type { InstagramCookies } from '../session/types.js';
-import { DEFAULT_API_CONFIG } from './types.js';
+import type { InstagramCookies, ExtendedCookies } from '../session/types.js';
+import { DEFAULT_API_CONFIG, USER_AGENT_CONFIGS } from './types.js';
 
 /**
  * Rate limit configuration
@@ -44,38 +45,313 @@ export class InstagramApiError extends Error {
 }
 
 /**
- * Build cookie string from InstagramCookies
+ * Error type for HTML response detection
  */
-export function buildCookieString(cookies: InstagramCookies): string {
+export type HtmlResponseType =
+  | 'login_required'
+  | 'captcha'
+  | 'challenge'
+  | 'rate_limited'
+  | 'blocked'
+  | 'unknown_html';
+
+/**
+ * Error thrown when Instagram returns HTML instead of JSON
+ * This typically indicates:
+ * - Login is required
+ * - CAPTCHA verification needed
+ * - Account challenge/verification
+ * - Rate limiting
+ * - IP/account blocked
+ */
+export class InstagramHtmlResponseError extends Error {
+  public readonly responseType: HtmlResponseType;
+  public readonly endpoint: string;
+  public readonly htmlSnippet: string;
+
+  constructor(
+    message: string,
+    responseType: HtmlResponseType,
+    endpoint: string,
+    htmlSnippet: string = ''
+  ) {
+    super(message);
+    this.name = 'InstagramHtmlResponseError';
+    this.responseType = responseType;
+    this.endpoint = endpoint;
+    this.htmlSnippet = htmlSnippet.slice(0, 500); // Keep only first 500 chars for debugging
+  }
+
+  /**
+   * Get user-friendly error message
+   */
+  getUserMessage(): string {
+    switch (this.responseType) {
+      case 'login_required':
+        return 'Instagram requires login. Please update your authentication cookies.';
+      case 'captcha':
+        return 'Instagram is requesting CAPTCHA verification. Please try again later or update your cookies.';
+      case 'challenge':
+        return 'Instagram requires account verification. Please log in to Instagram and complete the challenge.';
+      case 'rate_limited':
+        return 'Too many requests to Instagram. Please wait a few minutes before trying again.';
+      case 'blocked':
+        return 'Access to Instagram has been blocked. Please try again later or use a different network.';
+      case 'unknown_html':
+      default:
+        return 'Instagram returned an unexpected response. The service may be temporarily unavailable.';
+    }
+  }
+}
+
+/**
+ * Detect if response text is HTML instead of JSON
+ */
+export function isHtmlResponse(text: string): boolean {
+  if (!text || typeof text !== 'string') return false;
+
+  const trimmed = text.trim();
+
+  // Check for common HTML indicators
+  return (
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.startsWith('<!doctype') ||
+    trimmed.startsWith('<html') ||
+    trimmed.startsWith('<HTML') ||
+    trimmed.startsWith('<?xml') ||
+    // Sometimes HTML starts with whitespace/BOM then doctype
+    /^[\s\uFEFF]*<!DOCTYPE/i.test(trimmed) ||
+    /^[\s\uFEFF]*<html/i.test(trimmed)
+  );
+}
+
+/**
+ * Detect the type of HTML response from Instagram
+ */
+export function detectHtmlResponseType(html: string): HtmlResponseType {
+  const lowerHtml = html.toLowerCase();
+
+  // Login required indicators
+  if (
+    lowerHtml.includes('login') &&
+    (lowerHtml.includes('password') || lowerHtml.includes('sign in') || lowerHtml.includes('log in'))
+  ) {
+    return 'login_required';
+  }
+
+  // CAPTCHA indicators
+  if (
+    lowerHtml.includes('captcha') ||
+    lowerHtml.includes('recaptcha') ||
+    lowerHtml.includes('verify you') ||
+    lowerHtml.includes('not a robot')
+  ) {
+    return 'captcha';
+  }
+
+  // Challenge/verification indicators
+  if (
+    lowerHtml.includes('challenge') ||
+    lowerHtml.includes('verify your') ||
+    lowerHtml.includes('confirm your') ||
+    lowerHtml.includes('suspicious')
+  ) {
+    return 'challenge';
+  }
+
+  // Rate limiting indicators
+  if (
+    lowerHtml.includes('rate limit') ||
+    lowerHtml.includes('too many') ||
+    lowerHtml.includes('try again later') ||
+    lowerHtml.includes('slow down')
+  ) {
+    return 'rate_limited';
+  }
+
+  // Blocked indicators
+  if (
+    lowerHtml.includes('blocked') ||
+    lowerHtml.includes('banned') ||
+    lowerHtml.includes('disabled') ||
+    lowerHtml.includes('unavailable')
+  ) {
+    return 'blocked';
+  }
+
+  return 'unknown_html';
+}
+
+/**
+ * Check response text and throw appropriate error if it's HTML
+ */
+export function validateJsonResponse(text: string, endpoint: string): void {
+  if (isHtmlResponse(text)) {
+    const responseType = detectHtmlResponseType(text);
+    const error = new InstagramHtmlResponseError(
+      `Instagram returned HTML instead of JSON (${responseType})`,
+      responseType,
+      endpoint,
+      text
+    );
+    console.error(`[ApiClient] HTML response detected: ${responseType}`);
+    console.error(`[ApiClient] User message: ${error.getUserMessage()}`);
+    throw error;
+  }
+}
+
+/**
+ * Build cookie string from InstagramCookies
+ * Enhanced for Issue #44: Support for extended cookies
+ * @param cookies - Instagram cookies (can be InstagramCookies or ExtendedCookies)
+ * @returns Formatted cookie string for HTTP Cookie header
+ */
+export function buildCookieString(cookies: InstagramCookies | ExtendedCookies): string {
+  // Required cookies
   const cookieParts = [
     `sessionid=${cookies.sessionid}`,
     `csrftoken=${cookies.csrftoken}`,
     `ds_user_id=${cookies.ds_user_id}`,
     `rur=${cookies.rur}`,
   ];
+
+  // Add optional extended cookies if present (Issue #44)
+  const extendedCookies = cookies as ExtendedCookies;
+  if (extendedCookies.mid) {
+    cookieParts.push(`mid=${extendedCookies.mid}`);
+  }
+  if (extendedCookies.ig_did) {
+    cookieParts.push(`ig_did=${extendedCookies.ig_did}`);
+  }
+  if (extendedCookies.ig_nrcb) {
+    cookieParts.push(`ig_nrcb=${extendedCookies.ig_nrcb}`);
+  }
+  if (extendedCookies.datr) {
+    cookieParts.push(`datr=${extendedCookies.datr}`);
+  }
+  if (extendedCookies.shbid) {
+    cookieParts.push(`shbid=${extendedCookies.shbid}`);
+  }
+  if (extendedCookies.shbts) {
+    cookieParts.push(`shbts=${extendedCookies.shbts}`);
+  }
+
   return cookieParts.join('; ');
 }
 
 /**
+ * Header configuration options for different request types
+ */
+export interface HeaderOptions {
+  /** Use mobile app User-Agent instead of web browser */
+  useMobileUserAgent?: boolean;
+  /** Use Android app User-Agent (default is iOS Safari) */
+  useAndroidUserAgent?: boolean;
+  /** Target URL for the Sec-Fetch-Site header */
+  targetUrl?: string;
+  /** Additional custom headers to include */
+  additionalHeaders?: Record<string, string>;
+}
+
+/**
  * Build request headers for authenticated Instagram API requests
+ * Enhanced for Issue #44: Added X-Instagram-AJAX, X-ASBD-ID, and other required headers
+ * @param cookies - Instagram authentication cookies
+ * @param options - Header configuration options or additional headers (for backwards compatibility)
+ * @returns Complete headers object for Instagram API requests
  */
 export function buildHeaders(
-  cookies: InstagramCookies,
-  additionalHeaders: Record<string, string> = {}
+  cookies: InstagramCookies | ExtendedCookies,
+  options: HeaderOptions | Record<string, string> = {}
 ): Record<string, string> {
-  return {
-    'User-Agent': DEFAULT_API_CONFIG.userAgent,
+  // Support both new HeaderOptions and legacy Record<string, string> format
+  const headerOptions: HeaderOptions = 'useMobileUserAgent' in options || 'additionalHeaders' in options
+    ? options as HeaderOptions
+    : { additionalHeaders: options as Record<string, string> };
+
+  // Select appropriate User-Agent based on options
+  let userAgent: string = DEFAULT_API_CONFIG.userAgent;
+  if (headerOptions.useAndroidUserAgent) {
+    userAgent = USER_AGENT_CONFIGS.androidApp;
+  } else if (headerOptions.useMobileUserAgent) {
+    userAgent = USER_AGENT_CONFIGS.iOSApp;
+  }
+
+  // Build the headers object with all required Instagram headers (Issue #44)
+  const headers: Record<string, string> = {
+    // Standard browser headers
+    'User-Agent': userAgent,
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9,ja;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+
+    // Instagram-specific headers (Issue #44 requirements)
     'X-IG-App-ID': DEFAULT_API_CONFIG.appId,
+    'X-Instagram-AJAX': DEFAULT_API_CONFIG.ajaxVersion,
+    'X-ASBD-ID': DEFAULT_API_CONFIG.asbdId,
     'X-CSRFToken': cookies.csrftoken,
     'X-IG-WWW-Claim': '0',
     'X-Requested-With': 'XMLHttpRequest',
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9,ja;q=0.8',
+
+    // Cookie header with extended cookie support
     'Cookie': buildCookieString(cookies),
+
+    // Origin and referrer for CORS
     'Origin': 'https://www.instagram.com',
     'Referer': 'https://www.instagram.com/',
-    ...additionalHeaders,
+
+    // Security fetch metadata headers
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+
+    // Cache control
+    'Cache-Control': 'no-cache',
+    'Pragma': 'no-cache',
   };
+
+  // Add additional custom headers
+  if (headerOptions.additionalHeaders) {
+    Object.assign(headers, headerOptions.additionalHeaders);
+  }
+
+  return headers;
+}
+
+/**
+ * Build headers specifically for GraphQL API requests
+ * GraphQL endpoints may require slightly different header configuration
+ */
+export function buildGraphQLHeaders(
+  cookies: InstagramCookies | ExtendedCookies,
+  additionalHeaders: Record<string, string> = {}
+): Record<string, string> {
+  return buildHeaders(cookies, {
+    additionalHeaders: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'X-FB-Friendly-Name': 'PolarisPostActionLoadPostQueryQuery',
+      ...additionalHeaders,
+    },
+  });
+}
+
+/**
+ * Build headers for mobile API endpoints (i.instagram.com)
+ * Uses mobile app User-Agent for better compatibility
+ */
+export function buildMobileApiHeaders(
+  cookies: InstagramCookies | ExtendedCookies,
+  additionalHeaders: Record<string, string> = {}
+): Record<string, string> {
+  return buildHeaders(cookies, {
+    useMobileUserAgent: true,
+    additionalHeaders: {
+      'X-IG-Capabilities': DEFAULT_API_CONFIG.igCapabilities,
+      'X-IG-Connection-Type': 'WIFI',
+      ...additionalHeaders,
+    },
+  });
 }
 
 /**
@@ -239,12 +515,33 @@ export class ApiClient {
     }
 
     const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      return (await response.json()) as T;
+
+    // Always get text first to check for HTML response
+    const text = await response.text();
+
+    // Check for HTML response (Instagram sometimes returns HTML even with 200 status)
+    validateJsonResponse(text, url);
+
+    // Parse as JSON if expected
+    if (contentType?.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+      try {
+        return JSON.parse(text) as T;
+      } catch (parseError) {
+        // If JSON parsing fails, check again if it might be HTML
+        if (isHtmlResponse(text)) {
+          validateJsonResponse(text, url);
+        }
+        throw new InstagramApiError(
+          `Failed to parse JSON response: ${(parseError as Error).message}`,
+          response.status,
+          url,
+          false
+        );
+      }
     }
 
     // For non-JSON responses, return text as unknown type
-    return (await response.text()) as unknown as T;
+    return text as unknown as T;
   }
 
   /**

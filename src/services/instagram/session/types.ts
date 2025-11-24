@@ -23,6 +23,25 @@ export interface InstagramCookies {
 }
 
 /**
+ * Extended cookies interface with optional additional cookies
+ * for enhanced session stability (Issue #44)
+ */
+export interface ExtendedCookies extends InstagramCookies {
+  /** Mid - Machine ID cookie for device fingerprinting */
+  mid?: string;
+  /** Instagram GIS (Graph ID Signature) for GraphQL requests */
+  ig_did?: string;
+  /** Locale preference cookie */
+  ig_nrcb?: string;
+  /** User preference cookie */
+  datr?: string;
+  /** Shbid - Browser ID for tracking */
+  shbid?: string;
+  /** Shbts - Browser timestamp */
+  shbts?: string;
+}
+
+/**
  * Required cookie names for Instagram authentication
  */
 export const REQUIRED_COOKIE_NAMES = [

@@ -3,6 +3,7 @@ import { DownloadResult } from '../types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { safeResponseJson, HtmlResponseError } from '../utils/htmlDetection.js';
 
 const DOWNLOAD_DIR = './downloads';
 const SNAPINSTA_API = 'https://snapinsta.to';
@@ -131,7 +132,15 @@ export class VideoDownloadService {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data = await response.json() as any;
+      let data: any;
+      try {
+        data = await safeResponseJson<any>(response);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          throw new Error('Snapinsta returned HTML instead of JSON');
+        }
+        throw error;
+      }
       const videoUrl = data.url || data.video_url;
 
       if (!videoUrl) {
@@ -179,7 +188,14 @@ export class VideoDownloadService {
         throw new Error('Failed to get oEmbed data');
       }
 
-      const data = await response.json();
+      try {
+        await safeResponseJson(response);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          throw new Error('oEmbed returned HTML instead of JSON');
+        }
+        throw error;
+      }
 
       // この方法では直接動画URLは取得できないため、
       // ページをパースする必要がある

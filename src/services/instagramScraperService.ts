@@ -2,6 +2,7 @@
 import { BuzzReel } from '../types/index.js';
 import { authenticatedScraperService } from './instagram/authenticatedScraperService.js';
 import { cookieAuthService } from './instagram/cookieAuthService.js';
+import { safeResponseJson, safeJsonParse, HtmlResponseError } from '../utils/htmlDetection.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
@@ -49,7 +50,17 @@ export class InstagramScraperService {
         return await this.getReelsFromHTML(username, limit);
       }
 
-      const data = await response.json() as any;
+      // Safe JSON parsing with HTML detection
+      let data: any;
+      try {
+        data = await safeResponseJson(response);
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          console.log('📱 Received HTML instead of JSON, trying alternative method...');
+          return await this.getReelsFromHTML(username, limit);
+        }
+        throw error;
+      }
       const user = data.data?.user;
 
       if (!user) return await this.getReelsFromHTML(username, limit);
@@ -156,9 +167,16 @@ export class InstagramScraperService {
       let authorUsername = '';
 
       if (oembedRes.ok) {
-        const oembed = await oembedRes.json() as any;
-        title = oembed.title || '';
-        authorUsername = oembed.author_name || '';
+        try {
+          const oembed = await safeResponseJson<any>(oembedRes);
+          title = oembed.title || '';
+          authorUsername = oembed.author_name || '';
+        } catch (error) {
+          if (error instanceof HtmlResponseError) {
+            console.log('[Scraper] oEmbed returned HTML instead of JSON');
+          }
+          // Continue without oEmbed data
+        }
       }
 
       // 詳細情報を取得
@@ -168,7 +186,27 @@ export class InstagramScraperService {
       });
 
       if (infoRes.ok) {
-        const data = await infoRes.json() as any;
+        let data: any;
+        try {
+          data = await safeResponseJson<any>(infoRes);
+        } catch (error) {
+          if (error instanceof HtmlResponseError) {
+            console.log('[Scraper] Info API returned HTML instead of JSON - Instagram may be blocking');
+            // Return fallback data instead of throwing
+            return {
+              id: shortcode,
+              url,
+              shortcode,
+              title,
+              views: 0,
+              likes: 0,
+              comments: 0,
+              posted_at: new Date(),
+              author: { username: authorUsername, followers: 0 }
+            };
+          }
+          throw error;
+        }
         const item = data.graphql?.shortcode_media || data.items?.[0];
 
         if (item) {

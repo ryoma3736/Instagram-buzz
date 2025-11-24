@@ -9,3 +9,4 @@ export * from './explore.js';
 export * from './apiClient.js';
 export * from './responseParser.js';
 export * from './hashtagSearch.js';
+export * from './trendingApi.js';

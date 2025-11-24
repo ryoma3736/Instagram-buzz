@@ -1,10 +1,37 @@
-// F1: バズリール検索機能（API Key不要版）
+// F1: Multi-Strategy Reel Search Service (Issue #15 Update)
+// Uses multi-strategy scraping with automatic fallback
 import { BuzzReel, SearchParams } from '../types/index.js';
 import { instagramScraperService } from './instagramScraperService.js';
+import { multiStrategyService, MultiStrategyResult } from './multiStrategy/index.js';
+
+/**
+ * Configuration for search behavior
+ */
+interface SearchConfig {
+  /** Use multi-strategy scraping (default: true) */
+  useMultiStrategy: boolean;
+  /** Enable verbose logging */
+  verbose: boolean;
+  /** Maximum retries for failed searches */
+  maxRetries: number;
+}
+
+const DEFAULT_CONFIG: SearchConfig = {
+  useMultiStrategy: true,
+  verbose: true,
+  maxRetries: 2,
+};
 
 export class ReelSearchService {
+  private config: SearchConfig;
+
+  constructor(config: Partial<SearchConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
   /**
-   * バズリールを検索（API Key不要・スクレイピング版）
+   * Search buzz reels using multi-strategy approach
+   * Falls back to single scraper if multi-strategy fails
    */
   async searchBuzzReels(params: SearchParams): Promise<BuzzReel[]> {
     const {
@@ -14,18 +41,38 @@ export class ReelSearchService {
       limit = 10
     } = params;
 
-    console.log(`🔍 Searching for buzz reels: "${keyword}"`);
-    console.log(`   Period: ${period} days, Min views: ${min_views}`);
+    this.log(`Searching for buzz reels: "${keyword}"`);
+    this.log(`   Period: ${period} days, Min views: ${min_views}`);
+
+    let reels: BuzzReel[] = [];
 
     try {
-      // スクレイピングでリール取得（API Key不要）
-      const reels = await instagramScraperService.searchByHashtag(keyword, limit * 3);
+      if (this.config.useMultiStrategy) {
+        // Use multi-strategy scraping for better reliability
+        const result = await multiStrategyService.searchByHashtag(keyword, limit * 3);
+        reels = result.reels;
 
-      // フィルタリング
+        this.log(`Multi-strategy result: ${reels.length} reels from ${result.successCount} strategies`);
+
+        if (result.bestStrategy) {
+          this.log(`Best strategy: ${result.bestStrategy}`);
+        }
+      } else {
+        // Fallback to single scraper
+        reels = await instagramScraperService.searchByHashtag(keyword, limit * 3);
+      }
+
+      // If multi-strategy returned no results, try single scraper
+      if (reels.length === 0 && this.config.useMultiStrategy) {
+        this.log('Multi-strategy returned no results, trying single scraper...');
+        reels = await instagramScraperService.searchByHashtag(keyword, limit * 3);
+      }
+
+      // Filter and sort results
       const filtered = this.filterReels(reels, { period, min_views });
-
-      // エンゲージメント率でソート
       const sorted = this.sortByEngagement(filtered);
+
+      this.log(`Final result: ${sorted.length} reels after filtering`);
 
       return sorted.slice(0, limit);
     } catch (error) {
@@ -35,23 +82,111 @@ export class ReelSearchService {
   }
 
   /**
-   * ユーザーのリールを取得
+   * Get user reels using multi-strategy approach
    */
   async getUserReels(username: string, limit: number = 12): Promise<BuzzReel[]> {
-    return instagramScraperService.getPublicReels(username, limit);
+    this.log(`Fetching reels from @${username}`);
+
+    try {
+      if (this.config.useMultiStrategy) {
+        const result = await multiStrategyService.getUserReels(username, limit);
+
+        this.log(`Got ${result.reels.length} reels via multi-strategy`);
+
+        if (result.reels.length > 0) {
+          return result.reels;
+        }
+      }
+
+      // Fallback to single scraper
+      this.log('Falling back to single scraper');
+      return await instagramScraperService.getPublicReels(username, limit);
+    } catch (error) {
+      console.error(`Failed to get reels for @${username}:`, error);
+      return [];
+    }
   }
 
   /**
-   * トレンドリールを取得
+   * Get trending reels using multi-strategy approach
    */
   async getTrendingReels(limit: number = 20): Promise<BuzzReel[]> {
-    return instagramScraperService.getTrendingReels(limit);
+    this.log('Fetching trending reels');
+
+    try {
+      if (this.config.useMultiStrategy) {
+        const result = await multiStrategyService.getTrendingReels(limit);
+
+        this.log(`Got ${result.reels.length} trending reels via multi-strategy`);
+
+        if (result.reels.length > 0) {
+          return result.reels.sort((a, b) => b.views - a.views);
+        }
+      }
+
+      // Fallback to single scraper
+      this.log('Falling back to single scraper');
+      return await instagramScraperService.getTrendingReels(limit);
+    } catch (error) {
+      console.error('Failed to get trending reels:', error);
+      return [];
+    }
   }
 
   /**
-   * 期間・再生数でフィルタリング
+   * Get single reel info using multi-strategy approach
    */
-  private filterReels(reels: BuzzReel[], filters: { period: number; min_views: number }): BuzzReel[] {
+  async getReelInfo(url: string): Promise<BuzzReel | null> {
+    this.log(`Fetching reel info: ${url}`);
+
+    try {
+      if (this.config.useMultiStrategy) {
+        const result = await multiStrategyService.getReelByUrl(url);
+
+        if (result.reels.length > 0) {
+          this.log(`Got reel via ${result.bestStrategy}`);
+          return result.reels[0];
+        }
+      }
+
+      // Fallback to single scraper
+      this.log('Falling back to single scraper');
+      return await instagramScraperService.getReelByUrl(url);
+    } catch (error) {
+      console.error(`Failed to get reel info for ${url}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get health status of all scraping strategies
+   */
+  getStrategyHealth(): MultiStrategyResult['strategyResults'] | null {
+    if (!this.config.useMultiStrategy) {
+      return null;
+    }
+
+    const summary = multiStrategyService.getHealthSummary();
+    this.log(`Strategy health: ${summary.healthyStrategies}/${summary.totalStrategies} healthy`);
+
+    return null; // Returns summary info through logging
+  }
+
+  /**
+   * Enable or disable multi-strategy mode
+   */
+  setMultiStrategyMode(enabled: boolean): void {
+    this.config.useMultiStrategy = enabled;
+    this.log(`Multi-strategy mode: ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Filter reels by period and minimum views
+   */
+  private filterReels(
+    reels: BuzzReel[],
+    filters: { period: number; min_views: number }
+  ): BuzzReel[] {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - filters.period);
 
@@ -63,7 +198,7 @@ export class ReelSearchService {
   }
 
   /**
-   * エンゲージメント率でソート
+   * Sort reels by engagement rate
    */
   private sortByEngagement(reels: BuzzReel[]): BuzzReel[] {
     return reels.sort((a, b) => {
@@ -74,7 +209,7 @@ export class ReelSearchService {
   }
 
   /**
-   * モックデータ（開発用）
+   * Generate mock data for development/fallback
    */
   private getMockData(keyword: string, limit: number): BuzzReel[] {
     const mockReels: BuzzReel[] = [];
@@ -100,11 +235,14 @@ export class ReelSearchService {
   }
 
   /**
-   * URLからリール情報を取得（スクレイパー使用）
+   * Logging utility
    */
-  async getReelInfo(url: string): Promise<BuzzReel | null> {
-    return instagramScraperService.getReelByUrl(url);
+  private log(message: string): void {
+    if (this.config.verbose) {
+      console.log(`[ReelSearch] ${message}`);
+    }
   }
 }
 
+// Export singleton with multi-strategy enabled by default
 export const reelSearchService = new ReelSearchService();

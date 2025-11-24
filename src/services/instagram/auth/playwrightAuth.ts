@@ -16,6 +16,7 @@ import {
   LoginEventCallbacks,
 } from './types.js';
 import { LoginHandler } from './loginHandler.js';
+import { parseLocalJson } from '../../../utils/safeJsonParse.js';
 
 /**
  * Playwright認証サービス
@@ -208,8 +209,9 @@ export class PlaywrightAuthService {
     try {
       if (!fs.existsSync(this.loginConfig.cookieSavePath)) return null;
 
-      const data = JSON.parse(
-        fs.readFileSync(this.loginConfig.cookieSavePath, 'utf-8')
+      const data = parseLocalJson<InstagramCookies & { savedAt: number }>(
+        fs.readFileSync(this.loginConfig.cookieSavePath, 'utf-8'),
+        this.loginConfig.cookieSavePath
       );
 
       // 90日以上前のCookieは無効

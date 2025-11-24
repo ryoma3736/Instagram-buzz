@@ -7,6 +7,7 @@
 
 import type { InstagramCookies, ExtendedCookies } from '../session/types.js';
 import { DEFAULT_API_CONFIG, USER_AGENT_CONFIGS } from './types.js';
+import { safeJsonParse } from '../../../utils/safeJsonParse.js';
 
 /**
  * Rate limit configuration
@@ -525,7 +526,7 @@ export class ApiClient {
     // Parse as JSON if expected
     if (contentType?.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
       try {
-        return JSON.parse(text) as T;
+        return safeJsonParse<T>(text, url);
       } catch (parseError) {
         // If JSON parsing fails, check again if it might be HTML
         if (isHtmlResponse(text)) {

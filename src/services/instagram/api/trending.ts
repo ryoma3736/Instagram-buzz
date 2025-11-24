@@ -12,6 +12,8 @@ import type {
   ApiResponse,
 } from './types.js';
 import { DEFAULT_API_CONFIG, API_ENDPOINTS } from './types.js';
+import { safeJsonParseOrNull } from '../../../utils/safeJsonParse.js';
+import { isHtmlResponse, detectHtmlResponseType } from './apiClient.js';
 
 /**
  * Build request headers for authenticated Instagram API requests
@@ -125,7 +127,20 @@ export class TrendingService {
         return await this.getTrendingReelsAlternative(options);
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        console.error(`[TrendingService] HTML response detected (${responseType}), trying alternative`);
+        return await this.getTrendingReelsAlternative(options);
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, 'trending reels API');
+      if (!data) {
+        console.error('[TrendingService] Failed to parse JSON, trying alternative');
+        return await this.getTrendingReelsAlternative(options);
+      }
+
       const items: TrendingContent[] = [];
 
       // Parse items from response
@@ -222,7 +237,18 @@ export class TrendingService {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        throw new Error(`HTML response detected (${responseType})`);
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, 'recommended API');
+      if (!data) {
+        throw new Error('Failed to parse JSON response');
+      }
+
       const items: TrendingContent[] = [];
 
       const reels = data.tray || data.reels || [];
@@ -269,7 +295,19 @@ export class TrendingService {
         return null;
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        console.error(`[TrendingService] HTML response when fetching media ${shortcode} (${responseType})`);
+        return null;
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, `media/${shortcode}`);
+      if (!data) {
+        return null;
+      }
+
       const media = data.graphql?.shortcode_media || data.items?.[0];
 
       if (!media) {

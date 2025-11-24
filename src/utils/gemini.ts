@@ -1,5 +1,6 @@
 // Gemini 3 Client Utility
 import { GoogleGenAI } from '@google/genai';
+import { parseLocalJson } from './safeJsonParse.js';
 
 const GEMINI_MODEL = 'gemini-3-pro-preview';
 
@@ -32,7 +33,7 @@ export async function generateJSON<T>(prompt: string): Promise<T | null> {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]) as T;
+      return parseLocalJson<T>(jsonMatch[0], 'Gemini response');
     }
     return null;
   } catch (error) {

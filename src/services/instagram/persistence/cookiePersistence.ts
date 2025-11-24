@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { FileStorage } from './fileStorage';
 import { CookieData } from '../session/types';
+import { parseLocalJson } from '../../../utils/safeJsonParse.js';
 
 /**
  * Instagram cookies structure for authentication
@@ -106,7 +107,7 @@ export class CookiePersistence {
     }
 
     try {
-      const data = JSON.parse(content) as StoredCookieData;
+      const data = parseLocalJson<StoredCookieData>(content, `cookies/${username || 'default'}`);
 
       // Validate required fields
       if (!this.isValidStoredData(data)) {

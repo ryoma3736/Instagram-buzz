@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { generateJSON } from '../utils/gemini.js';
+import { parseLocalJsonOrNull } from '../utils/safeJsonParse.js';
 
 export class TranscriptionService {
   private tempDir = './temp';
@@ -43,8 +44,12 @@ export class TranscriptionService {
       whisper.on('close', () => {
         const jsonPath = audioPath.replace('.wav', '.json');
         if (fs.existsSync(jsonPath)) {
-          const data = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
-          resolve(data.segments?.map((s: any) => ({ start_time: s.start, end_time: s.end, text: s.text })) || []);
+          const data = parseLocalJsonOrNull<any>(fs.readFileSync(jsonPath, 'utf-8'), jsonPath);
+          if (data) {
+            resolve(data.segments?.map((s: any) => ({ start_time: s.start, end_time: s.end, text: s.text })) || []);
+          } else {
+            resolve([{ start_time: 0, end_time: 0, text: '[JSON解析に失敗]' }]);
+          }
         } else {
           resolve([{ start_time: 0, end_time: 0, text: '[音声認識に失敗]' }]);
         }

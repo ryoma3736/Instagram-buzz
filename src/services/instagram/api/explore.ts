@@ -13,6 +13,8 @@ import type {
   ApiResponse,
 } from './types.js';
 import { DEFAULT_API_CONFIG } from './types.js';
+import { safeJsonParseOrNull } from '../../../utils/safeJsonParse.js';
+import { isHtmlResponse, detectHtmlResponseType } from './apiClient.js';
 
 /**
  * Build request headers for authenticated Instagram API requests
@@ -117,7 +119,20 @@ export class ExploreService {
         return await this.getExploreFromWeb(options);
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        console.error(`[ExploreService] HTML response detected (${responseType}), trying web fallback`);
+        return await this.getExploreFromWeb(options);
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, 'explore grid API');
+      if (!data) {
+        console.error('[ExploreService] Failed to parse JSON, trying web fallback');
+        return await this.getExploreFromWeb(options);
+      }
+
       const sections: ExploreSection[] = [];
       const topPicks: TrendingContent[] = [];
 
@@ -248,7 +263,18 @@ export class ExploreService {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        throw new Error(`HTML response detected (${responseType})`);
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, 'explore reels API');
+      if (!data) {
+        throw new Error('Failed to parse JSON response');
+      }
+
       const items: TrendingContent[] = [];
 
       const reels = data.items || [];
@@ -290,7 +316,18 @@ export class ExploreService {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        throw new Error(`HTML response detected (${responseType})`);
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, 'category API');
+      if (!data) {
+        throw new Error('Failed to parse JSON response');
+      }
+
       const items: TrendingContent[] = [];
 
       const edges = data.data?.hashtag?.edge_hashtag_to_media?.edges ||
@@ -352,7 +389,19 @@ export class ExploreService {
         return null;
       }
 
-      const data = await response.json() as Record<string, any>;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlResponse(text)) {
+        const responseType = detectHtmlResponseType(text);
+        console.error(`[ExploreService] HTML response when fetching media ${shortcode} (${responseType})`);
+        return null;
+      }
+
+      const data = safeJsonParseOrNull<Record<string, any>>(text, `media/${shortcode}`);
+      if (!data) {
+        return null;
+      }
+
       const media = data.graphql?.shortcode_media || data.items?.[0];
 
       if (!media) {

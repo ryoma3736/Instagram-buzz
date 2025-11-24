@@ -1,5 +1,6 @@
 // Instagram OAuth認証サービス
 import * as fs from 'fs';
+import { parseLocalJson, safeJsonParseOrNull, isHtmlContent } from '../utils/safeJsonParse.js';
 
 const TOKEN_FILE = './.instagram_token.json';
 
@@ -48,7 +49,15 @@ export class InstagramAuthService {
 
       if (!response.ok) throw new Error(`Token exchange failed: ${response.status}`);
 
-      const data = await response.json() as any;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlContent(text)) {
+        throw new Error('HTML response received instead of token');
+      }
+
+      const data = safeJsonParseOrNull<any>(text, 'exchangeCodeForToken');
+      if (!data) throw new Error('Failed to parse token response');
+
       const token: InstagramToken = {
         access_token: data.access_token,
         token_type: 'Bearer',
@@ -78,7 +87,15 @@ export class InstagramAuthService {
       const url = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${this.clientSecret}&access_token=${shortLivedToken}`;
       const response = await fetch(url);
       if (!response.ok) return null;
-      return await response.json() as any;
+
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlContent(text)) {
+        console.error('[InstagramAuthService] HTML response in getLongLivedToken');
+        return null;
+      }
+
+      return safeJsonParseOrNull<any>(text, 'getLongLivedToken');
     } catch {
       return null;
     }
@@ -98,11 +115,11 @@ export class InstagramAuthService {
   getStoredToken(): string | null {
     try {
       if (!fs.existsSync(TOKEN_FILE)) return null;
-      const data = JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf-8')) as InstagramToken;
+      const data = parseLocalJson<InstagramToken>(fs.readFileSync(TOKEN_FILE, 'utf-8'), TOKEN_FILE);
 
       // 有効期限チェック (60日)
       if (data.expires_in && Date.now() - data.created_at > data.expires_in * 1000) {
-        console.warn('⚠️ Instagram token expired');
+        console.warn('Instagram token expired');
         return null;
       }
       return data.access_token;
@@ -123,7 +140,16 @@ export class InstagramAuthService {
       const response = await fetch(url);
       if (!response.ok) return false;
 
-      const data = await response.json() as any;
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlContent(text)) {
+        console.error('[InstagramAuthService] HTML response in refreshToken');
+        return false;
+      }
+
+      const data = safeJsonParseOrNull<any>(text, 'refreshToken');
+      if (!data) return false;
+
       const token: InstagramToken = {
         access_token: data.access_token,
         token_type: 'Bearer',

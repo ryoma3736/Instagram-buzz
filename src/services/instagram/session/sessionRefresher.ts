@@ -18,6 +18,7 @@ import type {
 import { DEFAULT_REFRESH_CONFIG } from './types.js';
 import { SessionManager, type SessionStatus } from './sessionManager.js';
 import { DEFAULT_API_CONFIG } from '../api/types.js';
+import { parseLocalJson, safeJsonParseOrNull, isHtmlContent } from '../../../utils/safeJsonParse.js';
 
 /**
  * Session file paths
@@ -305,10 +306,28 @@ export class SessionRefresher {
         };
       }
 
-      const data = (await response.json()) as {
+      // Get text first and check for HTML response
+      const text = await response.text();
+      if (isHtmlContent(text)) {
+        return {
+          success: false,
+          error: 'HTML response received instead of JSON',
+          retriesUsed: this.currentRetryCount,
+        };
+      }
+
+      const data = safeJsonParseOrNull<{
         access_token: string;
         expires_in: number;
-      };
+      }>(text, 'sessionRefresher API');
+
+      if (!data) {
+        return {
+          success: false,
+          error: 'Failed to parse refresh response',
+          retriesUsed: this.currentRetryCount,
+        };
+      }
 
       const newSessionData: SessionData = {
         accessToken: data.access_token,
@@ -453,7 +472,7 @@ export class SessionRefresher {
         return null;
       }
       const data = fs.readFileSync(SESSION_FILE, 'utf-8');
-      return JSON.parse(data) as SessionData;
+      return parseLocalJson<SessionData>(data, SESSION_FILE);
     } catch (error) {
       this.log(
         `Failed to load session: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -482,7 +501,7 @@ export class SessionRefresher {
         return null;
       }
       const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
-      return JSON.parse(data) as AuthCredentials;
+      return parseLocalJson<AuthCredentials>(data, CREDENTIALS_FILE);
     } catch {
       return null;
     }

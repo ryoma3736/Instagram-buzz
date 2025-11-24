@@ -10,6 +10,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { InstagramCookies } from './session/types.js';
 import { validateCookies } from './cookieExtractor.js';
+import { parseLocalJson } from '../../utils/safeJsonParse.js';
 
 /**
  * Storage configuration options
@@ -227,7 +228,7 @@ export class CookieStorage {
       }
 
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      const storedData: StoredCookieData = JSON.parse(fileContent);
+      const storedData: StoredCookieData = parseLocalJson<StoredCookieData>(fileContent, filePath);
 
       let cookies: InstagramCookies;
 
@@ -252,9 +253,9 @@ export class CookieStorage {
           storedData.iv,
           storedData.authTag
         );
-        cookies = JSON.parse(decrypted);
+        cookies = parseLocalJson<InstagramCookies>(decrypted, 'decrypted cookies');
       } else {
-        cookies = JSON.parse(storedData.data);
+        cookies = parseLocalJson<InstagramCookies>(storedData.data, 'cookie data');
       }
 
       // Validate cookies
@@ -323,7 +324,7 @@ export class CookieStorage {
       }
 
       const fileContent = fs.readFileSync(filePath, 'utf8');
-      const storedData: StoredCookieData = JSON.parse(fileContent);
+      const storedData: StoredCookieData = parseLocalJson<StoredCookieData>(fileContent, filePath);
 
       return {
         exists: true,

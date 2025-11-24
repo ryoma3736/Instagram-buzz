@@ -12,5 +12,19 @@ export { InstagramAuthService, instagramAuthService } from './instagramAuthServi
 export { InstagramApiService, instagramApiService } from './instagramApiService.js';
 // Instagram Scraper (API Key不要)
 export { InstagramScraperService, instagramScraperService } from './instagramScraperService.js';
+// Multi-Strategy Scraper (Issue #15: Block bypass with fallback)
+export {
+  MultiStrategyService,
+  multiStrategyService,
+  createMultiStrategyService,
+} from './multiStrategy/index.js';
+export type {
+  ScrapingStrategy,
+  StrategyResult,
+  MultiStrategyResult,
+  MultiStrategyConfig,
+  MultiStrategySearchParams,
+  StrategyHealthStatus,
+} from './multiStrategy/index.js';
 // Database (SQLite)
 export { DatabaseService, databaseService } from './databaseService.js';

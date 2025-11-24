@@ -44,6 +44,37 @@ export class InstagramApiError extends Error {
 }
 
 /**
+ * HTML Response Error - thrown when HTML is received instead of JSON
+ */
+export class HtmlResponseError extends InstagramApiError {
+  constructor(
+    endpoint: string,
+    public readonly responsePreview: string
+  ) {
+    super(
+      'Received HTML response instead of JSON - Instagram may be blocking the request or requiring login',
+      200,
+      endpoint,
+      false
+    );
+    this.name = 'HtmlResponseError';
+  }
+}
+
+/**
+ * Check if response text is HTML instead of JSON
+ */
+function isHtmlResponse(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.startsWith('<html') ||
+    trimmed.startsWith('<HTML') ||
+    trimmed.startsWith('<?xml')
+  );
+}
+
+/**
  * Build cookie string from InstagramCookies
  */
 export function buildCookieString(cookies: InstagramCookies): string {
@@ -238,13 +269,41 @@ export class ApiClient {
       );
     }
 
+    // Read response text first to check for HTML
+    const text = await response.text();
+
+    // Check for HTML response (login page, error page, etc.)
+    if (isHtmlResponse(text)) {
+      throw new HtmlResponseError(url, text.slice(0, 100));
+    }
+
+    // Check for empty response
+    if (!text.trim()) {
+      throw new InstagramApiError(
+        'Empty response received',
+        response.status,
+        url,
+        false
+      );
+    }
+
+    // Parse JSON
     const contentType = response.headers.get('content-type');
-    if (contentType?.includes('application/json')) {
-      return (await response.json()) as T;
+    if (contentType?.includes('application/json') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+      try {
+        return JSON.parse(text) as T;
+      } catch (parseError) {
+        throw new InstagramApiError(
+          `JSON parse error: ${(parseError as Error).message}. Preview: "${text.slice(0, 50)}..."`,
+          response.status,
+          url,
+          false
+        );
+      }
     }
 
     // For non-JSON responses, return text as unknown type
-    return (await response.text()) as unknown as T;
+    return text as unknown as T;
   }
 
   /**

@@ -9,6 +9,7 @@ import {
   buildHeaders,
   buildCookieString,
   InstagramApiError,
+  HtmlResponseError,
   createApiClient,
   DEFAULT_RATE_LIMIT,
 } from '../../../src/services/instagram/api/apiClient.js';
@@ -73,6 +74,19 @@ describe('InstagramApiError', () => {
   });
 });
 
+describe('HtmlResponseError', () => {
+  it('should create error with correct properties', () => {
+    const error = new HtmlResponseError('/api/test', '<!DOCTYPE html>...');
+
+    expect(error.message).toContain('HTML response');
+    expect(error.statusCode).toBe(200);
+    expect(error.endpoint).toBe('/api/test');
+    expect(error.isRateLimited).toBe(false);
+    expect(error.responsePreview).toBe('<!DOCTYPE html>...');
+    expect(error.name).toBe('HtmlResponseError');
+  });
+});
+
 describe('ApiClient', () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -102,7 +116,7 @@ describe('ApiClient', () => {
     it('should make GET request with headers', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        text: async () => JSON.stringify({ success: true }),
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
@@ -155,13 +169,42 @@ describe('ApiClient', () => {
         InstagramApiError
       );
     });
+
+    it('should throw HtmlResponseError when HTML is received', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => '<!DOCTYPE html><html><head><title>Login</title></head></html>',
+        headers: new Headers({ 'content-type': 'text/html' }),
+      });
+
+      const client = new ApiClient(mockCookies);
+
+      await expect(client.get('https://api.test.com/endpoint')).rejects.toThrow(
+        HtmlResponseError
+      );
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        text: async () => '<!DOCTYPE html><html><head><title>Login</title></head></html>',
+        headers: new Headers({ 'content-type': 'text/html' }),
+      });
+
+      try {
+        await client.get('https://api.test.com/endpoint');
+      } catch (error) {
+        if (error instanceof HtmlResponseError) {
+          expect(error.responsePreview).toContain('<!DOCTYPE');
+          expect(error.endpoint).toBe('https://api.test.com/endpoint');
+        }
+      }
+    });
   });
 
   describe('post', () => {
     it('should make POST request with JSON body', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        text: async () => JSON.stringify({ success: true }),
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
@@ -185,7 +228,7 @@ describe('ApiClient', () => {
     it('should make POST request with form data', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ success: true }),
+        text: async () => JSON.stringify({ success: true }),
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 
@@ -228,7 +271,7 @@ describe('ApiClient', () => {
     it('should update cookies', async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => ({ success: true }),
+        text: async () => JSON.stringify({ success: true }),
         headers: new Headers({ 'content-type': 'application/json' }),
       });
 

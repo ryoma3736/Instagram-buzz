@@ -5,6 +5,59 @@ import { cookieAuthService } from './instagram/cookieAuthService.js';
 
 const USER_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
+/**
+ * Custom error class for HTML response detection
+ */
+export class HtmlResponseError extends Error {
+  constructor(
+    message: string,
+    public readonly url: string,
+    public readonly responsePreview: string
+  ) {
+    super(message);
+    this.name = 'HtmlResponseError';
+  }
+}
+
+/**
+ * Validate that the response text is valid JSON and not HTML
+ * @param text - Response text to validate
+ * @param url - URL for error context
+ * @returns Parsed JSON data
+ * @throws HtmlResponseError if response is HTML
+ */
+function validateAndParseJson<T>(text: string, url: string): T {
+  // Check for HTML response indicators
+  const trimmedText = text.trim();
+
+  if (trimmedText.startsWith('<!DOCTYPE') ||
+      trimmedText.startsWith('<html') ||
+      trimmedText.startsWith('<HTML') ||
+      trimmedText.startsWith('<?xml')) {
+    throw new HtmlResponseError(
+      'Received HTML response instead of JSON - Instagram may be blocking the request or requiring login',
+      url,
+      trimmedText.slice(0, 100)
+    );
+  }
+
+  // Check for empty response
+  if (!trimmedText) {
+    throw new Error('Empty response received');
+  }
+
+  // Try to parse JSON
+  try {
+    return JSON.parse(trimmedText) as T;
+  } catch (parseError) {
+    // Provide more context about the parsing failure
+    const preview = trimmedText.slice(0, 100);
+    throw new Error(
+      `JSON parse error: ${(parseError as Error).message}. Response preview: "${preview}..."`
+    );
+  }
+}
+
 export class InstagramScraperService {
   /**
    * Check if authenticated mode is available
@@ -45,11 +98,22 @@ export class InstagramScraperService {
       });
 
       if (!response.ok) {
-        console.log('📱 Trying alternative method...');
+        console.log('[Scraper] API returned non-OK status, trying HTML scrape...');
         return await this.getReelsFromHTML(username, limit);
       }
 
-      const data = await response.json() as any;
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = validateAndParseJson<any>(responseText, url);
+      } catch (parseError) {
+        if (parseError instanceof HtmlResponseError) {
+          console.log('[Scraper] HTML response detected, trying alternative method...');
+        } else {
+          console.log('[Scraper] JSON parse error:', (parseError as Error).message);
+        }
+        return await this.getReelsFromHTML(username, limit);
+      }
       const user = data.data?.user;
 
       if (!user) return await this.getReelsFromHTML(username, limit);
@@ -62,7 +126,7 @@ export class InstagramScraperService {
         .map((e: any) => this.transformNode(e.node, username));
 
     } catch (error) {
-      console.log('⚠️ API failed, trying HTML scrape...');
+      console.log('[Scraper] API failed, trying HTML scrape...');
       return await this.getReelsFromHTML(username, limit);
     }
   }
@@ -88,40 +152,49 @@ export class InstagramScraperService {
       const scriptMatch = html.match(/<script type="application\/json"[^>]*>(\{.*?"xdt_api__v1__clips__user__connection_v2".*?\})<\/script>/s);
 
       if (scriptMatch) {
-        const jsonData = JSON.parse(scriptMatch[1]);
-        const clips = jsonData?.require?.[0]?.[3]?.[0]?.__bbox?.require?.[0]?.[3]?.[1]?.__bbox?.result?.data?.xdt_api__v1__clips__user__connection_v2?.edges;
+        try {
+          const jsonData = JSON.parse(scriptMatch[1]);
+          const clips = jsonData?.require?.[0]?.[3]?.[0]?.__bbox?.require?.[0]?.[3]?.[1]?.__bbox?.result?.data?.xdt_api__v1__clips__user__connection_v2?.edges;
 
-        if (clips) {
-          return clips.slice(0, limit).map((edge: any) => ({
-            id: edge.node.media?.pk || edge.node.id,
-            url: `https://www.instagram.com/reel/${edge.node.media?.code || ''}/`,
-            shortcode: edge.node.media?.code || '',
-            title: edge.node.media?.caption?.text?.slice(0, 100) || '',
-            views: edge.node.media?.play_count || 0,
-            likes: edge.node.media?.like_count || 0,
-            comments: edge.node.media?.comment_count || 0,
-            posted_at: new Date((edge.node.media?.taken_at || 0) * 1000),
-            author: { username, followers: 0 },
-            thumbnail_url: edge.node.media?.image_versions2?.candidates?.[0]?.url
-          }));
+          if (clips) {
+            return clips.slice(0, limit).map((edge: any) => ({
+              id: edge.node.media?.pk || edge.node.id,
+              url: `https://www.instagram.com/reel/${edge.node.media?.code || ''}/`,
+              shortcode: edge.node.media?.code || '',
+              title: edge.node.media?.caption?.text?.slice(0, 100) || '',
+              views: edge.node.media?.play_count || 0,
+              likes: edge.node.media?.like_count || 0,
+              comments: edge.node.media?.comment_count || 0,
+              posted_at: new Date((edge.node.media?.taken_at || 0) * 1000),
+              author: { username, followers: 0 },
+              thumbnail_url: edge.node.media?.image_versions2?.candidates?.[0]?.url
+            }));
+          }
+        } catch (jsonError) {
+          console.log('[Scraper] Failed to parse embedded JSON data:', (jsonError as Error).message);
+          // Continue to try alternative method
         }
       }
 
       // 代替: SharedData から抽出
       const sharedDataMatch = html.match(/window\._sharedData\s*=\s*(\{.+?\});<\/script>/);
       if (sharedDataMatch) {
-        const sharedData = JSON.parse(sharedDataMatch[1]);
-        const mediaNodes = sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user?.edge_owner_to_timeline_media?.edges || [];
+        try {
+          const sharedData = JSON.parse(sharedDataMatch[1]);
+          const mediaNodes = sharedData?.entry_data?.ProfilePage?.[0]?.graphql?.user?.edge_owner_to_timeline_media?.edges || [];
 
-        return mediaNodes
-          .filter((e: any) => e.node.is_video)
-          .slice(0, limit)
-          .map((e: any) => this.transformNode(e.node, username));
+          return mediaNodes
+            .filter((e: any) => e.node.is_video)
+            .slice(0, limit)
+            .map((e: any) => this.transformNode(e.node, username));
+        } catch (sharedDataError) {
+          console.log('[Scraper] Failed to parse SharedData:', (sharedDataError as Error).message);
+        }
       }
 
       return [];
     } catch (error) {
-      console.error('HTML scrape failed:', error);
+      console.error('[Scraper] HTML scrape failed:', error);
       return [];
     }
   }
@@ -156,9 +229,15 @@ export class InstagramScraperService {
       let authorUsername = '';
 
       if (oembedRes.ok) {
-        const oembed = await oembedRes.json() as any;
-        title = oembed.title || '';
-        authorUsername = oembed.author_name || '';
+        try {
+          const oembedText = await oembedRes.text();
+          const oembed = validateAndParseJson<{ title?: string; author_name?: string }>(oembedText, oembedUrl);
+          title = oembed.title || '';
+          authorUsername = oembed.author_name || '';
+        } catch (oembedError) {
+          console.log('[Scraper] oEmbed parse failed, continuing with fallback:', (oembedError as Error).message);
+          // Continue without oEmbed data
+        }
       }
 
       // 詳細情報を取得
@@ -168,25 +247,39 @@ export class InstagramScraperService {
       });
 
       if (infoRes.ok) {
-        const data = await infoRes.json() as any;
-        const item = data.graphql?.shortcode_media || data.items?.[0];
+        try {
+          const infoText = await infoRes.text();
+          const data = validateAndParseJson<{
+            graphql?: { shortcode_media?: any };
+            items?: any[];
+          }>(infoText, infoUrl);
+          const item = data.graphql?.shortcode_media || data.items?.[0];
 
-        if (item) {
-          return {
-            id: item.id || shortcode,
-            url,
-            shortcode,
-            title: item.edge_media_to_caption?.edges?.[0]?.node?.text?.slice(0, 100) || title,
-            views: item.video_view_count || item.play_count || 0,
-            likes: item.edge_media_preview_like?.count || item.like_count || 0,
-            comments: item.edge_media_to_comment?.count || item.comment_count || 0,
-            posted_at: new Date((item.taken_at_timestamp || item.taken_at || 0) * 1000),
-            author: {
-              username: item.owner?.username || authorUsername,
-              followers: item.owner?.edge_followed_by?.count || 0
-            },
-            thumbnail_url: item.thumbnail_src || item.image_versions2?.candidates?.[0]?.url
-          };
+          if (item) {
+            return {
+              id: item.id || shortcode,
+              url,
+              shortcode,
+              title: item.edge_media_to_caption?.edges?.[0]?.node?.text?.slice(0, 100) || title,
+              views: item.video_view_count || item.play_count || 0,
+              likes: item.edge_media_preview_like?.count || item.like_count || 0,
+              comments: item.edge_media_to_comment?.count || item.comment_count || 0,
+              posted_at: new Date((item.taken_at_timestamp || item.taken_at || 0) * 1000),
+              author: {
+                username: item.owner?.username || authorUsername,
+                followers: item.owner?.edge_followed_by?.count || 0
+              },
+              thumbnail_url: item.thumbnail_src || item.image_versions2?.candidates?.[0]?.url
+            };
+          }
+        } catch (parseError) {
+          if (parseError instanceof HtmlResponseError) {
+            console.log(`[Scraper] HTML response detected from ${infoUrl}`);
+            console.log('[Scraper] Instagram may be blocking requests. Consider using cookie authentication.');
+          } else {
+            console.log('[Scraper] Failed to parse reel info:', (parseError as Error).message);
+          }
+          // Fall through to fallback response
         }
       }
 
@@ -204,7 +297,15 @@ export class InstagramScraperService {
       };
 
     } catch (error) {
-      console.error('Reel fetch failed:', error);
+      if (error instanceof HtmlResponseError) {
+        console.error('[Scraper] Reel fetch failed - HTML response received:');
+        console.error(`  URL: ${error.url}`);
+        console.error(`  Preview: ${error.responsePreview}`);
+        console.error('  This typically means Instagram is blocking the request or requiring authentication.');
+        console.error('  Solution: Set up cookie authentication. See INSTAGRAM_SESSION_ID in .env');
+      } else {
+        console.error('[Scraper] Reel fetch failed:', (error as Error).message);
+      }
       return null;
     }
   }
@@ -256,7 +357,7 @@ export class InstagramScraperService {
 
       return reels;
     } catch (error) {
-      console.error('Hashtag search failed:', error);
+      console.error('[Scraper] Hashtag search failed:', error);
       return [];
     }
   }
@@ -302,7 +403,7 @@ export class InstagramScraperService {
 
       return reels.sort((a, b) => b.views - a.views);
     } catch (error) {
-      console.error('Trending fetch failed:', error);
+      console.error('[Scraper] Trending fetch failed:', error);
       return [];
     }
   }

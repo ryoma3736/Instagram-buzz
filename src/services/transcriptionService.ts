@@ -63,7 +63,7 @@ export class TranscriptionService {
     const fullText = segments.map(s => s.text).join('\n');
     const structured = await this.structureScript(fullText);
 
-    try { fs.unlinkSync(audioPath); } catch {}
+    try { fs.unlinkSync(audioPath); } catch { /* ignore cleanup errors */ }
 
     return { full_text: fullText, segments, ...structured };
   }

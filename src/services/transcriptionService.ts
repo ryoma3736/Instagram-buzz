@@ -2,11 +2,21 @@
 import { Script, ScriptSegment } from '../types/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { generateJSON } from '../utils/gemini.js';
+
+export interface FFmpegNotFoundError {
+  error: string;
+  instructions: {
+    macOS: string;
+    'Ubuntu/Debian': string;
+    Windows: string;
+  };
+}
 
 export class TranscriptionService {
   private tempDir = './temp';
+  private ffmpegAvailable: boolean | null = null;
 
   constructor() {
     if (!fs.existsSync(this.tempDir)) {
@@ -14,15 +24,46 @@ export class TranscriptionService {
     }
   }
 
+  private checkFFmpegInstalled(): boolean {
+    if (this.ffmpegAvailable !== null) {
+      return this.ffmpegAvailable;
+    }
+    try {
+      const command = process.platform === 'win32' ? 'where ffmpeg' : 'which ffmpeg';
+      execSync(command, { stdio: 'ignore' });
+      this.ffmpegAvailable = true;
+      return true;
+    } catch {
+      this.ffmpegAvailable = false;
+      return false;
+    }
+  }
+
+  getFFmpegNotFoundError(): FFmpegNotFoundError {
+    return {
+      error: 'ffmpeg is not installed. Please install it first:',
+      instructions: {
+        macOS: 'brew install ffmpeg',
+        'Ubuntu/Debian': 'sudo apt-get install ffmpeg',
+        Windows: 'Download from https://ffmpeg.org/download.html'
+      }
+    };
+  }
+
   async transcribeVideo(videoPath: string): Promise<Script> {
     console.log(`📝 Transcribing video: ${videoPath}`);
+
+    if (!this.checkFFmpegInstalled()) {
+      const errorInfo = this.getFFmpegNotFoundError();
+      throw new Error(`${errorInfo.error} macOS: ${errorInfo.instructions.macOS}`);
+    }
 
     const audioPath = await this.extractAudio(videoPath);
     const segments = await this.transcribeAudio(audioPath);
     const fullText = segments.map(s => s.text).join('\n');
     const structured = await this.structureScript(fullText);
 
-    try { fs.unlinkSync(audioPath); } catch {}
+    try { fs.unlinkSync(audioPath); } catch { /* ignore cleanup errors */ }
 
     return { full_text: fullText, segments, ...structured };
   }
@@ -31,8 +72,23 @@ export class TranscriptionService {
     const outputPath = path.join(this.tempDir, `audio_${Date.now()}.wav`);
     return new Promise((resolve, reject) => {
       const ffmpeg = spawn('ffmpeg', ['-i', videoPath, '-vn', '-ar', '16000', '-ac', '1', '-y', outputPath]);
-      ffmpeg.on('close', code => code === 0 ? resolve(outputPath) : reject(new Error('FFmpeg failed')));
-      ffmpeg.on('error', reject);
+
+      ffmpeg.on('close', code => {
+        if (code === 0) {
+          resolve(outputPath);
+        } else {
+          reject(new Error(`FFmpeg failed with exit code ${code}`));
+        }
+      });
+
+      ffmpeg.on('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'ENOENT') {
+          const errorInfo = this.getFFmpegNotFoundError();
+          reject(new Error(`${errorInfo.error} macOS: ${errorInfo.instructions.macOS}`));
+        } else {
+          reject(err);
+        }
+      });
     });
   }
 

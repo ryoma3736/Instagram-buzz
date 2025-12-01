@@ -177,44 +177,72 @@ export class VideoDownloadService {
 
   /**
    * 直接ダウンロード（フォールバック）
+   * oEmbed APIは不安定なため、直接HTMLパースを優先
    */
   private async downloadDirect(url: string, outputPath: string): Promise<DownloadResult> {
     try {
-      // Instagram oEmbed API で動画URLを取得
-      const oembedUrl = `https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`;
-      const response = await fetch(oembedUrl);
-
-      if (!response.ok) {
-        throw new Error('Failed to get oEmbed data');
-      }
-
-      try {
-        await safeResponseJson(response);
-      } catch (error) {
-        if (error instanceof HtmlResponseError) {
-          throw new Error('oEmbed returned HTML instead of JSON');
-        }
-        throw error;
-      }
-
-      // この方法では直接動画URLは取得できないため、
-      // ページをパースする必要がある
+      // 直接ページをパースして動画URLを取得
       const pageResponse = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Connection': 'keep-alive',
         }
       });
 
-      const html = await pageResponse.text();
-      const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
-
-      if (!videoUrlMatch) {
-        throw new Error('Video URL not found in page');
+      if (!pageResponse.ok) {
+        throw new Error(`Failed to fetch page: ${pageResponse.status}`);
       }
 
-      const videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
-      const videoResponse = await fetch(videoUrl);
+      const html = await pageResponse.text();
+
+      // 複数のパターンで動画URLを検索
+      let videoUrl: string | null = null;
+
+      // Pattern 1: video_url in JSON
+      const videoUrlMatch = html.match(/"video_url":"([^"]+)"/);
+      if (videoUrlMatch) {
+        videoUrl = videoUrlMatch[1].replace(/\\u0026/g, '&');
+      }
+
+      // Pattern 2: contentUrl in JSON-LD
+      if (!videoUrl) {
+        const contentUrlMatch = html.match(/"contentUrl":"([^"]+)"/);
+        if (contentUrlMatch) {
+          videoUrl = contentUrlMatch[1].replace(/\\u0026/g, '&');
+        }
+      }
+
+      // Pattern 3: og:video meta tag
+      if (!videoUrl) {
+        const ogVideoMatch = html.match(/<meta[^>]*property="og:video"[^>]*content="([^"]+)"/);
+        if (ogVideoMatch) {
+          videoUrl = ogVideoMatch[1];
+        }
+      }
+
+      if (!videoUrl) {
+        // Instagram requires login for most content
+        throw new Error('Video URL not found. Instagram may require authentication for this content.');
+      }
+
+      const videoResponse = await fetch(videoUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://www.instagram.com/'
+        }
+      });
+
+      if (!videoResponse.ok) {
+        throw new Error(`Failed to download video: ${videoResponse.status}`);
+      }
+
       const buffer = await videoResponse.arrayBuffer();
+
+      if (buffer.byteLength < 1000) {
+        throw new Error('Downloaded file is too small, may be invalid');
+      }
 
       fs.writeFileSync(outputPath, Buffer.from(buffer));
 
@@ -224,7 +252,7 @@ export class VideoDownloadService {
         success: true,
         file_path: outputPath,
         file_size: stats.size,
-        duration: 0, // Duration not available in this method
+        duration: 0,
         format: 'mp4'
       };
     } catch (error) {
